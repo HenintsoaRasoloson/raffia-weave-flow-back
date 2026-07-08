@@ -35,21 +35,21 @@ export class ProductsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Récupérer un produit' })
-  @ApiOkResponse({ description: 'Produit trouvé' })
+  @ApiOkResponse({ description: 'Produit trouvé', type: ProductResponseDto })
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
   }
 
   @Post()
   @ApiOperation({ summary: 'Créer un produit' })
-  @ApiCreatedResponse({ description: 'Produit créé' })
+  @ApiCreatedResponse({ description: 'Produit créé', type: ProductResponseDto })
   create(@Body() dto: CreateProductDto) {
     return this.productsService.create(dto);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Mettre à jour un produit' })
-  @ApiOkResponse({ description: 'Produit mis à jour' })
+  @ApiOkResponse({ description: 'Produit mis à jour', type: ProductResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
     return this.productsService.update(id, dto);
   }

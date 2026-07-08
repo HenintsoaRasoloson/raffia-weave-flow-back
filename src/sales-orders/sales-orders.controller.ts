@@ -36,28 +36,31 @@ export class SalesOrdersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Récupérer une commande' })
-  @ApiOkResponse({ description: 'Commande trouvée' })
+  @ApiOkResponse({ description: 'Commande trouvée', type: SalesOrderResponseDto })
   findOne(@Param('id') id: string) {
     return this.salesOrdersService.findOne(id);
   }
 
   @Post()
   @ApiOperation({ summary: 'Créer une commande' })
-  @ApiCreatedResponse({ description: 'Commande créée' })
+  @ApiCreatedResponse({ description: 'Commande créée', type: SalesOrderResponseDto })
   create(@Body() dto: CreateSalesOrderDto) {
     return this.salesOrdersService.create(dto);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Mettre à jour une commande' })
-  @ApiOkResponse({ description: 'Commande mise à jour' })
+  @ApiOkResponse({ description: 'Commande mise à jour', type: SalesOrderResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateSalesOrderDto) {
     return this.salesOrdersService.update(id, dto);
   }
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Transition métier du statut commande' })
-  @ApiOkResponse({ description: 'Statut commande mis à jour' })
+  @ApiOkResponse({
+    description: 'Statut commande mis à jour',
+    type: SalesOrderResponseDto,
+  })
   updateStatus(@Param('id') id: string, @Body() dto: UpdateSalesOrderStatusDto) {
     return this.salesOrdersService.updateStatus(id, dto);
   }

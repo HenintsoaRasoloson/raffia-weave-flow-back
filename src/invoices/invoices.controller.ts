@@ -35,28 +35,31 @@ export class InvoicesController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Récupérer une facture' })
-  @ApiOkResponse({ description: 'Facture trouvée' })
+  @ApiOkResponse({ description: 'Facture trouvée', type: InvoiceResponseDto })
   findOne(@Param('id') id: string) {
     return this.invoicesService.findOne(id);
   }
 
   @Post()
   @ApiOperation({ summary: 'Créer une facture' })
-  @ApiCreatedResponse({ description: 'Facture créée' })
+  @ApiCreatedResponse({ description: 'Facture créée', type: InvoiceResponseDto })
   create(@Body() dto: CreateInvoiceDto) {
     return this.invoicesService.create(dto);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Mettre à jour une facture' })
-  @ApiOkResponse({ description: 'Facture mise à jour' })
+  @ApiOkResponse({ description: 'Facture mise à jour', type: InvoiceResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateInvoiceDto) {
     return this.invoicesService.update(id, dto);
   }
 
   @Patch(':id/mark-paid')
   @ApiOperation({ summary: 'Marquer une facture comme payée' })
-  @ApiOkResponse({ description: 'Facture marquée payée' })
+  @ApiOkResponse({
+    description: 'Facture marquée payée',
+    type: InvoiceResponseDto,
+  })
   markPaid(@Param('id') id: string) {
     return this.invoicesService.markPaid(id);
   }

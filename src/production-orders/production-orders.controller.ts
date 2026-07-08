@@ -41,28 +41,31 @@ export class ProductionOrdersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Récupérer un ordre de fabrication' })
-  @ApiOkResponse({ description: 'OF trouvé' })
+  @ApiOkResponse({ description: 'OF trouvé', type: ProductionOrderResponseDto })
   findOne(@Param('id') id: string) {
     return this.productionOrdersService.findOne(id);
   }
 
   @Post()
   @ApiOperation({ summary: 'Créer un ordre de fabrication' })
-  @ApiCreatedResponse({ description: 'OF créé' })
+  @ApiCreatedResponse({ description: 'OF créé', type: ProductionOrderResponseDto })
   create(@Body() dto: CreateProductionOrderDto) {
     return this.productionOrdersService.create(dto);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Mettre à jour un ordre de fabrication' })
-  @ApiOkResponse({ description: 'OF mis à jour' })
+  @ApiOkResponse({ description: 'OF mis à jour', type: ProductionOrderResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateProductionOrderDto) {
     return this.productionOrdersService.update(id, dto);
   }
 
   @Patch(':id/progress')
   @ApiOperation({ summary: 'Mettre à jour l avancement métier d un OF' })
-  @ApiOkResponse({ description: 'Progression OF mise à jour' })
+  @ApiOkResponse({
+    description: 'Progression OF mise à jour',
+    type: ProductionOrderResponseDto,
+  })
   updateProgress(
     @Param('id') id: string,
     @Body() dto: UpdateProductionProgressDto,

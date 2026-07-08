@@ -35,21 +35,21 @@ export class ClientsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Récupérer un client' })
-  @ApiOkResponse({ description: 'Client trouvé' })
+  @ApiOkResponse({ description: 'Client trouvé', type: ClientResponseDto })
   findOne(@Param('id') id: string) {
     return this.clientsService.findOne(id);
   }
 
   @Post()
   @ApiOperation({ summary: 'Créer un client' })
-  @ApiCreatedResponse({ description: 'Client créé' })
+  @ApiCreatedResponse({ description: 'Client créé', type: ClientResponseDto })
   create(@Body() dto: CreateClientDto) {
     return this.clientsService.create(dto);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Mettre à jour un client' })
-  @ApiOkResponse({ description: 'Client mis à jour' })
+  @ApiOkResponse({ description: 'Client mis à jour', type: ClientResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateClientDto) {
     return this.clientsService.update(id, dto);
   }

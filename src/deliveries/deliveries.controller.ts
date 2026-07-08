@@ -35,28 +35,31 @@ export class DeliveriesController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Récupérer une livraison' })
-  @ApiOkResponse({ description: 'Livraison trouvée' })
+  @ApiOkResponse({ description: 'Livraison trouvée', type: DeliveryResponseDto })
   findOne(@Param('id') id: string) {
     return this.deliveriesService.findOne(id);
   }
 
   @Post()
   @ApiOperation({ summary: 'Créer une livraison' })
-  @ApiCreatedResponse({ description: 'Livraison créée' })
+  @ApiCreatedResponse({ description: 'Livraison créée', type: DeliveryResponseDto })
   create(@Body() dto: CreateDeliveryDto) {
     return this.deliveriesService.create(dto);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Mettre à jour une livraison' })
-  @ApiOkResponse({ description: 'Livraison mise à jour' })
+  @ApiOkResponse({ description: 'Livraison mise à jour', type: DeliveryResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateDeliveryDto) {
     return this.deliveriesService.update(id, dto);
   }
 
   @Patch(':id/mark-delivered')
   @ApiOperation({ summary: 'Marquer une livraison comme livrée' })
-  @ApiOkResponse({ description: 'Livraison marquée livrée' })
+  @ApiOkResponse({
+    description: 'Livraison marquée livrée',
+    type: DeliveryResponseDto,
+  })
   markDelivered(@Param('id') id: string) {
     return this.deliveriesService.markDelivered(id);
   }
