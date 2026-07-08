@@ -121,10 +121,19 @@ enum LedgerEntryType {
   TRANSFER
 }
 
+enum UserRole {
+  GERANT
+  RESPONSABLE_GENERAL
+  RESPONSABLE_PRODUCTION
+  RESPONSABLE_LIVRAISON
+  RESPONSABLE_FINANCIER_STOCKS
+}
+
 model User {
   id                  String    @id @default(cuid())
   email               String    @unique
   name                String?
+  role                UserRole  @default(RESPONSABLE_PRODUCTION)
   isAdmin             Boolean   @default(false)
   passwordHash        String
   refreshTokenHash    String?

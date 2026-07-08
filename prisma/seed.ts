@@ -33,6 +33,7 @@ async function main() {
       where: { email: normalizedEmail },
       data: {
         name,
+        role: 'GERANT',
         isAdmin: true,
         passwordHash,
       },
@@ -46,6 +47,7 @@ async function main() {
     data: {
       email: normalizedEmail,
       name,
+      role: 'GERANT',
       isAdmin: true,
       passwordHash,
     },

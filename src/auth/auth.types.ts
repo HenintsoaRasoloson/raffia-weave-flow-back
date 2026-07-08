@@ -2,12 +2,14 @@ export type JwtAccessPayload = {
   sub: string;
   email: string;
   name?: string | null;
+  role: string;
 };
 
 export type PublicUser = {
   id: string;
   email: string;
   name: string | null;
+  role: string;
   isAdmin: boolean;
   createdAt: Date;
   updatedAt: Date;

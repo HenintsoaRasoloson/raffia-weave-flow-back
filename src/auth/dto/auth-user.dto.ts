@@ -10,6 +10,17 @@ export class AuthUserDto {
   @ApiProperty({ required: false, nullable: true })
   name: string | null;
 
+  @ApiProperty({
+    enum: [
+      'GERANT',
+      'RESPONSABLE_GENERAL',
+      'RESPONSABLE_PRODUCTION',
+      'RESPONSABLE_LIVRAISON',
+      'RESPONSABLE_FINANCIER_STOCKS',
+    ],
+  })
+  role: string;
+
   @ApiProperty()
   isAdmin: boolean;
 

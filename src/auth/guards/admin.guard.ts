@@ -15,10 +15,10 @@ export class AdminGuard implements CanActivate {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { isAdmin: true },
+      select: { role: true, isAdmin: true },
     });
 
-    if (!user?.isAdmin) {
+    if (!user || (user.role !== 'GERANT' && !user.isAdmin)) {
       throw new ForbiddenException('Admin access required.');
     }
 
