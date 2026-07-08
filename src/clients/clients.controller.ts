@@ -14,8 +14,10 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ClientsService } from './clients.service';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { ClientResponseDto } from './dto/client-response.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 
@@ -26,7 +28,7 @@ export class ClientsController {
 
   @Get()
   @ApiOperation({ summary: 'Lister les clients' })
-  @ApiOkResponse({ description: 'Liste des clients' })
+  @ApiPaginatedResponse(ClientResponseDto, 'Liste paginee des clients')
   findAll(@Query() query: ListQueryDto) {
     return this.clientsService.findAll(query);
   }

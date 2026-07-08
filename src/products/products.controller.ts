@@ -14,8 +14,10 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
+import { ProductResponseDto } from './dto/product-response.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
 
@@ -26,7 +28,7 @@ export class ProductsController {
 
   @Get()
   @ApiOperation({ summary: 'Lister les produits' })
-  @ApiOkResponse({ description: 'Liste des produits' })
+  @ApiPaginatedResponse(ProductResponseDto, 'Liste paginee des produits')
   findAll(@Query() query: ListQueryDto) {
     return this.productsService.findAll(query);
   }

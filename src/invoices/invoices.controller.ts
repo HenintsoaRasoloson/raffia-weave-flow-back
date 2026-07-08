@@ -14,8 +14,10 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { InvoiceResponseDto } from './dto/invoice-response.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoicesService } from './invoices.service';
 
@@ -26,7 +28,7 @@ export class InvoicesController {
 
   @Get()
   @ApiOperation({ summary: 'Lister les factures' })
-  @ApiOkResponse({ description: 'Liste des factures' })
+  @ApiPaginatedResponse(InvoiceResponseDto, 'Liste paginee des factures')
   findAll(@Query() query: ListQueryDto) {
     return this.invoicesService.findAll(query);
   }

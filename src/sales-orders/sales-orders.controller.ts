@@ -14,8 +14,10 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
+import { SalesOrderResponseDto } from './dto/sales-order-response.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
 import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
 import { SalesOrdersService } from './sales-orders.service';
@@ -27,7 +29,7 @@ export class SalesOrdersController {
 
   @Get()
   @ApiOperation({ summary: 'Lister les commandes' })
-  @ApiOkResponse({ description: 'Liste des commandes' })
+  @ApiPaginatedResponse(SalesOrderResponseDto, 'Liste paginee des commandes')
   findAll(@Query() query: ListQueryDto) {
     return this.salesOrdersService.findAll(query);
   }

@@ -14,8 +14,10 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
+import { ProductionOrderResponseDto } from './dto/production-order-response.dto';
 import { UpdateProductionProgressDto } from './dto/update-production-progress.dto';
 import { UpdateProductionOrderDto } from './dto/update-production-order.dto';
 import { ProductionOrdersService } from './production-orders.service';
@@ -29,7 +31,10 @@ export class ProductionOrdersController {
 
   @Get()
   @ApiOperation({ summary: 'Lister les ordres de fabrication' })
-  @ApiOkResponse({ description: 'Liste des OF' })
+  @ApiPaginatedResponse(
+    ProductionOrderResponseDto,
+    'Liste paginee des ordres de fabrication',
+  )
   findAll(@Query() query: ListQueryDto) {
     return this.productionOrdersService.findAll(query);
   }

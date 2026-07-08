@@ -14,8 +14,10 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
+import { DeliveryResponseDto } from './dto/delivery-response.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 import { DeliveriesService } from './deliveries.service';
 
@@ -26,7 +28,7 @@ export class DeliveriesController {
 
   @Get()
   @ApiOperation({ summary: 'Lister les livraisons' })
-  @ApiOkResponse({ description: 'Liste des livraisons' })
+  @ApiPaginatedResponse(DeliveryResponseDto, 'Liste paginee des livraisons')
   findAll(@Query() query: ListQueryDto) {
     return this.deliveriesService.findAll(query);
   }
