@@ -1,9 +1,11 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import basicAuth from 'express-basic-auth';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+
+dotenv.config({ override: true });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
