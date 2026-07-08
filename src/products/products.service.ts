@@ -11,23 +11,31 @@ export class ProductsService {
   findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const where = {
+      ...(query.status ? { status: query.status as any } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { ref: { contains: query.q } },
+              { name: { contains: query.q } },
+            ],
+          }
+        : {}),
+    };
 
-    return this.prisma.product.findMany({
-      where: {
-        ...(query.status ? { status: query.status as any } : {}),
-        ...(query.q
-          ? {
-              OR: [
-                { ref: { contains: query.q, mode: 'insensitive' } },
-                { name: { contains: query.q, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
-      include: { category: true, variants: true },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+    return this.prisma.$transaction(async (tx) => {
+      const [items, total] = await Promise.all([
+        tx.product.findMany({
+          where,
+          include: { category: true, variants: true },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.product.count({ where }),
+      ]);
+
+      return { items, total, page, pageSize };
     });
   }
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
@@ -12,24 +12,32 @@ export class SalesOrdersService {
   findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const where = {
+      ...(query.status ? { status: query.status as any } : {}),
+      ...(query.type ? { orderType: query.type as any } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { orderNumber: { contains: query.q } },
+              { client: { is: { name: { contains: query.q } } } },
+            ],
+          }
+        : {}),
+    };
 
-    return this.prisma.salesOrder.findMany({
-      where: {
-        ...(query.status ? { status: query.status as any } : {}),
-        ...(query.type ? { orderType: query.type as any } : {}),
-        ...(query.q
-          ? {
-              OR: [
-                { orderNumber: { contains: query.q, mode: 'insensitive' } },
-                { client: { is: { name: { contains: query.q, mode: 'insensitive' } } } },
-              ],
-            }
-          : {}),
-      },
-      include: { client: true, items: true, invoices: true, deliveries: true },
-      orderBy: { orderDate: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+    return this.prisma.$transaction(async (tx) => {
+      const [items, total] = await Promise.all([
+        tx.salesOrder.findMany({
+          where,
+          include: { client: true, items: true, invoices: true, deliveries: true },
+          orderBy: { orderDate: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.salesOrder.count({ where }),
+      ]);
+
+      return { items, total, page, pageSize };
     });
   }
 
@@ -98,10 +106,37 @@ export class SalesOrdersService {
     });
   }
 
-  updateStatus(id: string, dto: UpdateSalesOrderStatusDto) {
+  async updateStatus(id: string, dto: UpdateSalesOrderStatusDto) {
+    const order = await this.prisma.salesOrder.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Commande introuvable');
+    }
+
+    const allowedTransitions: Record<string, string[]> = {
+      QUOTE: ['TO_PROCESS', 'CANCELLED'],
+      TO_PROCESS: ['IN_PRODUCTION', 'PREPARING', 'CANCELLED'],
+      IN_PRODUCTION: ['PREPARING', 'SHIPPED', 'CANCELLED'],
+      PREPARING: ['SHIPPED', 'CANCELLED'],
+      SHIPPED: ['DELIVERED', 'CANCELLED'],
+      DELIVERED: ['INVOICED'],
+      INVOICED: [],
+      CANCELLED: [],
+    };
+
+    const current = order.status as unknown as string;
+    const next = dto.status;
+    if (!allowedTransitions[current]?.includes(next)) {
+      throw new BadRequestException(
+        `Transition invalide: ${current} -> ${next}`,
+      );
+    }
+
     return this.prisma.salesOrder.update({
       where: { id },
-      data: { status: dto.status as any },
+      data: { status: next as any },
     });
   }
 

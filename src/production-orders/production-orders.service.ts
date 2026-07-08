@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
@@ -12,23 +12,31 @@ export class ProductionOrdersService {
   findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const where = {
+      ...(query.status ? { status: query.status as any } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { orderNumber: { contains: query.q } },
+              { product: { is: { name: { contains: query.q } } } },
+            ],
+          }
+        : {}),
+    };
 
-    return this.prisma.productionOrder.findMany({
-      where: {
-        ...(query.status ? { status: query.status as any } : {}),
-        ...(query.q
-          ? {
-              OR: [
-                { orderNumber: { contains: query.q, mode: 'insensitive' } },
-                { product: { is: { name: { contains: query.q, mode: 'insensitive' } } } },
-              ],
-            }
-          : {}),
-      },
-      include: { product: true, variant: true, salesOrder: true },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+    return this.prisma.$transaction(async (tx) => {
+      const [items, total] = await Promise.all([
+        tx.productionOrder.findMany({
+          where,
+          include: { product: true, variant: true, salesOrder: true },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.productionOrder.count({ where }),
+      ]);
+
+      return { items, total, page, pageSize };
     });
   }
 
@@ -74,13 +82,41 @@ export class ProductionOrdersService {
     });
   }
 
-  updateProgress(id: string, dto: UpdateProductionProgressDto) {
+  async updateProgress(id: string, dto: UpdateProductionProgressDto) {
+    const existing = await this.prisma.productionOrder.findUnique({
+      where: { id },
+      select: { status: true, progress: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Ordre de fabrication introuvable');
+    }
+
+    if (existing.status === 'COMPLETED' || existing.status === 'CANCELLED') {
+      throw new BadRequestException(
+        `OF verrouille: statut ${existing.status} non modifiable`,
+      );
+    }
+
     const clamped = Math.max(0, Math.min(100, dto.progress));
+    if (clamped < existing.progress) {
+      throw new BadRequestException(
+        'La progression ne peut pas diminuer',
+      );
+    }
+
+    const nextStatus = dto.status ?? (clamped === 100 ? 'COMPLETED' : undefined);
+
+    if (nextStatus === 'COMPLETED' && clamped < 100) {
+      throw new BadRequestException(
+        'Un OF ne peut etre COMPLETE qu avec 100% d avancement',
+      );
+    }
+
     return this.prisma.productionOrder.update({
       where: { id },
       data: {
         progress: clamped,
-        ...(dto.status ? { status: dto.status as any } : {}),
+        ...(nextStatus ? { status: nextStatus as any } : {}),
       } as any,
     });
   }

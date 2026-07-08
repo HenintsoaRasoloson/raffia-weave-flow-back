@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -11,24 +11,32 @@ export class InvoicesService {
   findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const where = {
+      ...(query.status ? { status: query.status as any } : {}),
+      ...(query.type ? { type: query.type as any } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { invoiceNumber: { contains: query.q } },
+              { client: { is: { name: { contains: query.q } } } },
+            ],
+          }
+        : {}),
+    };
 
-    return this.prisma.invoice.findMany({
-      where: {
-        ...(query.status ? { status: query.status as any } : {}),
-        ...(query.type ? { type: query.type as any } : {}),
-        ...(query.q
-          ? {
-              OR: [
-                { invoiceNumber: { contains: query.q, mode: 'insensitive' } },
-                { client: { is: { name: { contains: query.q, mode: 'insensitive' } } } },
-              ],
-            }
-          : {}),
-      },
-      include: { client: true, salesOrder: true, items: true },
-      orderBy: { issueDate: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+    return this.prisma.$transaction(async (tx) => {
+      const [items, total] = await Promise.all([
+        tx.invoice.findMany({
+          where,
+          include: { client: true, salesOrder: true, items: true },
+          orderBy: { issueDate: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.invoice.count({ where }),
+      ]);
+
+      return { items, total, page, pageSize };
     });
   }
 
@@ -101,7 +109,30 @@ export class InvoicesService {
     });
   }
 
-  markPaid(id: string) {
+  async markPaid(id: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      select: { status: true, type: true },
+    });
+    if (!invoice) {
+      throw new NotFoundException('Facture introuvable');
+    }
+
+    const current = invoice.status as unknown as string;
+    if (current === 'PAID') {
+      throw new BadRequestException('La facture est deja payee');
+    }
+    if (current === 'CANCELLED' || current === 'DRAFT') {
+      throw new BadRequestException(
+        `Transition invalide: ${current} -> PAID`,
+      );
+    }
+    if (invoice.type === 'CREDIT_NOTE') {
+      throw new BadRequestException(
+        'Un avoir ne peut pas etre marque comme paye',
+      );
+    }
+
     return this.prisma.invoice.update({
       where: { id },
       data: {
