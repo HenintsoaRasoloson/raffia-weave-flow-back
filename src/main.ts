@@ -1,11 +1,19 @@
 import 'dotenv/config';
 import basicAuth from 'express-basic-auth';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
 
   const swaggerUser = process.env.SWAGGER_USER;
   const swaggerPassword = process.env.SWAGGER_PASSWORD;

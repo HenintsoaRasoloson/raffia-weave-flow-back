@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
@@ -7,9 +8,27 @@ import { UpdateClientDto } from './dto/update-client.dto';
 export class ClientsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(query: ListQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
     return this.prisma.client.findMany({
+      where: {
+        ...(query.status ? { status: query.status as any } : {}),
+        ...(query.type ? { type: query.type as any } : {}),
+        ...(query.q
+          ? {
+              OR: [
+                { name: { contains: query.q, mode: 'insensitive' } },
+                { email: { contains: query.q, mode: 'insensitive' } },
+                { contactName: { contains: query.q, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     });
   }
 

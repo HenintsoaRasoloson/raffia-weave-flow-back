@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
@@ -7,10 +8,27 @@ import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 export class InvoicesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(query: ListQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
     return this.prisma.invoice.findMany({
+      where: {
+        ...(query.status ? { status: query.status as any } : {}),
+        ...(query.type ? { type: query.type as any } : {}),
+        ...(query.q
+          ? {
+              OR: [
+                { invoiceNumber: { contains: query.q, mode: 'insensitive' } },
+                { client: { is: { name: { contains: query.q, mode: 'insensitive' } } } },
+              ],
+            }
+          : {}),
+      },
       include: { client: true, salesOrder: true, items: true },
       orderBy: { issueDate: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     });
   }
 

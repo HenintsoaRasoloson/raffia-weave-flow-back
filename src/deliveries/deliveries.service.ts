@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
@@ -7,10 +8,28 @@ import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 export class DeliveriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(query: ListQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
     return this.prisma.delivery.findMany({
+      where: {
+        ...(query.status ? { status: query.status as any } : {}),
+        ...(query.q
+          ? {
+              OR: [
+                { deliveryNumber: { contains: query.q, mode: 'insensitive' } },
+                { carrier: { contains: query.q, mode: 'insensitive' } },
+                { trackingCode: { contains: query.q, mode: 'insensitive' } },
+                { client: { is: { name: { contains: query.q, mode: 'insensitive' } } } },
+              ],
+            }
+          : {}),
+      },
       include: { client: true, salesOrder: true },
       orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     });
   }
 

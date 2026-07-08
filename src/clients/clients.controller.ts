@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
@@ -14,6 +15,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ClientsService } from './clients.service';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 
@@ -25,8 +27,8 @@ export class ClientsController {
   @Get()
   @ApiOperation({ summary: 'Lister les clients' })
   @ApiOkResponse({ description: 'Liste des clients' })
-  findAll() {
-    return this.clientsService.findAll();
+  findAll(@Query() query: ListQueryDto) {
+    return this.clientsService.findAll(query);
   }
 
   @Get(':id')

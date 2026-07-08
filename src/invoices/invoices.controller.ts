@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
@@ -13,6 +14,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoicesService } from './invoices.service';
@@ -25,8 +27,8 @@ export class InvoicesController {
   @Get()
   @ApiOperation({ summary: 'Lister les factures' })
   @ApiOkResponse({ description: 'Liste des factures' })
-  findAll() {
-    return this.invoicesService.findAll();
+  findAll(@Query() query: ListQueryDto) {
+    return this.invoicesService.findAll(query);
   }
 
   @Get(':id')

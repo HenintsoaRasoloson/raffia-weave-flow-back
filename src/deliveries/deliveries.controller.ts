@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
@@ -13,6 +14,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 import { DeliveriesService } from './deliveries.service';
@@ -25,8 +27,8 @@ export class DeliveriesController {
   @Get()
   @ApiOperation({ summary: 'Lister les livraisons' })
   @ApiOkResponse({ description: 'Liste des livraisons' })
-  findAll() {
-    return this.deliveriesService.findAll();
+  findAll(@Query() query: ListQueryDto) {
+    return this.deliveriesService.findAll(query);
   }
 
   @Get(':id')

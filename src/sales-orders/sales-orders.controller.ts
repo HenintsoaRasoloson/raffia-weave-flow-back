@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
@@ -13,6 +14,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
 import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
@@ -26,8 +28,8 @@ export class SalesOrdersController {
   @Get()
   @ApiOperation({ summary: 'Lister les commandes' })
   @ApiOkResponse({ description: 'Liste des commandes' })
-  findAll() {
-    return this.salesOrdersService.findAll();
+  findAll(@Query() query: ListQueryDto) {
+    return this.salesOrdersService.findAll(query);
   }
 
   @Get(':id')

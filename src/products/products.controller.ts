@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
@@ -13,6 +14,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
@@ -25,8 +27,8 @@ export class ProductsController {
   @Get()
   @ApiOperation({ summary: 'Lister les produits' })
   @ApiOkResponse({ description: 'Liste des produits' })
-  findAll() {
-    return this.productsService.findAll();
+  findAll(@Query() query: ListQueryDto) {
+    return this.productsService.findAll(query);
   }
 
   @Get(':id')

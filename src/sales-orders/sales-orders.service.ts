@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
@@ -8,10 +9,27 @@ import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
 export class SalesOrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(query: ListQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
     return this.prisma.salesOrder.findMany({
+      where: {
+        ...(query.status ? { status: query.status as any } : {}),
+        ...(query.type ? { orderType: query.type as any } : {}),
+        ...(query.q
+          ? {
+              OR: [
+                { orderNumber: { contains: query.q, mode: 'insensitive' } },
+                { client: { is: { name: { contains: query.q, mode: 'insensitive' } } } },
+              ],
+            }
+          : {}),
+      },
       include: { client: true, items: true, invoices: true, deliveries: true },
       orderBy: { orderDate: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     });
   }
 

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
 import { UpdateProductionProgressDto } from './dto/update-production-progress.dto';
@@ -8,10 +9,26 @@ import { UpdateProductionOrderDto } from './dto/update-production-order.dto';
 export class ProductionOrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(query: ListQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
     return this.prisma.productionOrder.findMany({
+      where: {
+        ...(query.status ? { status: query.status as any } : {}),
+        ...(query.q
+          ? {
+              OR: [
+                { orderNumber: { contains: query.q, mode: 'insensitive' } },
+                { product: { is: { name: { contains: query.q, mode: 'insensitive' } } } },
+              ],
+            }
+          : {}),
+      },
       include: { product: true, variant: true, salesOrder: true },
       orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     });
   }
 

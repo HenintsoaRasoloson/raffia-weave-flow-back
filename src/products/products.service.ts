@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -7,10 +8,26 @@ import { UpdateProductDto } from './dto/update-product.dto';
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(query: ListQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
     return this.prisma.product.findMany({
+      where: {
+        ...(query.status ? { status: query.status as any } : {}),
+        ...(query.q
+          ? {
+              OR: [
+                { ref: { contains: query.q, mode: 'insensitive' } },
+                { name: { contains: query.q, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
       include: { category: true, variants: true },
       orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     });
   }
 
