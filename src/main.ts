@@ -41,6 +41,7 @@ async function bootstrap() {
     .setTitle('Raffia Weave Flow API')
     .setDescription('API documentation')
     .setVersion('1.0.0')
+    .addBearerAuth()
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup(swaggerPath, app, documentFactory);

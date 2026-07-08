@@ -1,24 +1,9 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-} from '@nestjs/common';
-import {
-  ApiCreatedResponse,
-  ApiBearerAuth,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
-import { UseGuards } from '@nestjs/common';
-import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
-import { ListQueryDto } from '../common/dto/list-query.dto';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ListQueryDto } from '../common/dto/list-query.dto';
+import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceResponseDto } from './dto/invoice-response.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
@@ -46,6 +31,7 @@ export class InvoicesController {
   }
 
   @Post()
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Créer une facture' })
   @ApiCreatedResponse({ description: 'Facture créée', type: InvoiceResponseDto })
   create(@Body() dto: CreateInvoiceDto) {
@@ -53,6 +39,7 @@ export class InvoicesController {
   }
 
   @Patch(':id')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Mettre à jour une facture' })
   @ApiOkResponse({ description: 'Facture mise à jour', type: InvoiceResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateInvoiceDto) {
@@ -60,6 +47,7 @@ export class InvoicesController {
   }
 
   @Patch(':id/mark-paid')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Marquer une facture comme payée' })
   @ApiOkResponse({
     description: 'Facture marquée payée',
@@ -70,6 +58,7 @@ export class InvoicesController {
   }
 
   @Delete(':id')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Supprimer une facture' })
   @ApiOkResponse({ description: 'Facture supprimée' })
   remove(@Param('id') id: string) {

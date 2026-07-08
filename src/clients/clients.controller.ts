@@ -1,25 +1,10 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-} from '@nestjs/common';
-import {
-  ApiCreatedResponse,
-  ApiBearerAuth,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
-import { UseGuards } from '@nestjs/common';
-import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ClientsService } from './clients.service';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
+import { ClientsService } from './clients.service';
 import { ClientResponseDto } from './dto/client-response.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
@@ -46,6 +31,7 @@ export class ClientsController {
   }
 
   @Post()
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Créer un client' })
   @ApiCreatedResponse({ description: 'Client créé', type: ClientResponseDto })
   create(@Body() dto: CreateClientDto) {
@@ -53,6 +39,7 @@ export class ClientsController {
   }
 
   @Patch(':id')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Mettre à jour un client' })
   @ApiOkResponse({ description: 'Client mis à jour', type: ClientResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateClientDto) {
@@ -60,6 +47,7 @@ export class ClientsController {
   }
 
   @Delete(':id')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Supprimer un client' })
   @ApiOkResponse({ description: 'Client supprimé' })
   remove(@Param('id') id: string) {

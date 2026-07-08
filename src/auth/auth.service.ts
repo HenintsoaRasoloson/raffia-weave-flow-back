@@ -48,7 +48,7 @@ export class AuthService {
       data: {
         email,
         name: dto.name?.trim() || null,
-          isAdmin: false,
+        isAdmin: false,
         passwordHash,
       },
     })) as AuthUserRecord;

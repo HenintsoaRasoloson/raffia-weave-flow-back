@@ -1,28 +1,13 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-} from '@nestjs/common';
-import {
-  ApiCreatedResponse,
-  ApiBearerAuth,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
-import { UseGuards } from '@nestjs/common';
-import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
-import { ListQueryDto } from '../common/dto/list-query.dto';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ListQueryDto } from '../common/dto/list-query.dto';
+import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
 import { ProductionOrderResponseDto } from './dto/production-order-response.dto';
-import { UpdateProductionProgressDto } from './dto/update-production-progress.dto';
 import { UpdateProductionOrderDto } from './dto/update-production-order.dto';
+import { UpdateProductionProgressDto } from './dto/update-production-progress.dto';
 import { ProductionOrdersService } from './production-orders.service';
 
 @ApiTags('Production')
@@ -52,6 +37,7 @@ export class ProductionOrdersController {
   }
 
   @Post()
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Créer un ordre de fabrication' })
   @ApiCreatedResponse({ description: 'OF créé', type: ProductionOrderResponseDto })
   create(@Body() dto: CreateProductionOrderDto) {
@@ -59,6 +45,7 @@ export class ProductionOrdersController {
   }
 
   @Patch(':id')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Mettre à jour un ordre de fabrication' })
   @ApiOkResponse({ description: 'OF mis à jour', type: ProductionOrderResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateProductionOrderDto) {
@@ -66,6 +53,7 @@ export class ProductionOrdersController {
   }
 
   @Patch(':id/progress')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Mettre à jour l avancement métier d un OF' })
   @ApiOkResponse({
     description: 'Progression OF mise à jour',
@@ -79,6 +67,7 @@ export class ProductionOrdersController {
   }
 
   @Delete(':id')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Supprimer un ordre de fabrication' })
   @ApiOkResponse({ description: 'OF supprimé' })
   remove(@Param('id') id: string) {

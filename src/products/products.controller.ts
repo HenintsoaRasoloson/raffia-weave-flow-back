@@ -1,24 +1,9 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-} from '@nestjs/common';
-import {
-  ApiCreatedResponse,
-  ApiBearerAuth,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
-import { UseGuards } from '@nestjs/common';
-import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
-import { ListQueryDto } from '../common/dto/list-query.dto';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ListQueryDto } from '../common/dto/list-query.dto';
+import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductResponseDto } from './dto/product-response.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -46,6 +31,7 @@ export class ProductsController {
   }
 
   @Post()
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Créer un produit' })
   @ApiCreatedResponse({ description: 'Produit créé', type: ProductResponseDto })
   create(@Body() dto: CreateProductDto) {
@@ -53,6 +39,7 @@ export class ProductsController {
   }
 
   @Patch(':id')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Mettre à jour un produit' })
   @ApiOkResponse({ description: 'Produit mis à jour', type: ProductResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
@@ -60,6 +47,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Supprimer un produit' })
   @ApiOkResponse({ description: 'Produit supprimé' })
   remove(@Param('id') id: string) {
