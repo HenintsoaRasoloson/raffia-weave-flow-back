@@ -125,6 +125,7 @@ model User {
   id                  String    @id @default(cuid())
   email               String    @unique
   name                String?
+  isAdmin             Boolean   @default(false)
   passwordHash        String
   refreshTokenHash    String?
   failedLoginAttempts Int       @default(0)
