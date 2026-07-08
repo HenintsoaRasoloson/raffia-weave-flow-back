@@ -1,0 +1,202 @@
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import type { Prisma } from '../generated/prisma/client';
+import { ListQueryDto } from '../common/dto/list-query.dto';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateCatalogShareDto } from './dto/create-catalog-share.dto';
+import { ReplaceCatalogShareProductsDto } from './dto/replace-catalog-share-products.dto';
+import { UpdateCatalogShareDto } from './dto/update-catalog-share.dto';
+
+export type CatalogShareWithClientAndProducts = Prisma.CatalogShareGetPayload<{
+  include: {
+    client: true;
+    products: {
+      include: {
+        product: true;
+      };
+    };
+  };
+}>;
+
+export type CatalogShareWithPublicProducts = Prisma.CatalogShareGetPayload<{
+  include: {
+    client: true;
+    products: {
+      include: {
+        product: {
+          include: {
+            category: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
+@Injectable()
+export class CatalogSharesService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  findAll(query: ListQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const where = {
+      ...(query.q
+        ? {
+            OR: [
+              { title: { contains: query.q } },
+              { token: { contains: query.q } },
+              { client: { name: { contains: query.q } } },
+            ],
+          }
+        : {}),
+    };
+
+    return this.prisma.$transaction(async (tx) => {
+      const [items, total] = await Promise.all([
+        tx.catalogShare.findMany({
+          where,
+          include: {
+            client: true,
+            products: {
+              include: { product: true },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.catalogShare.count({ where }),
+      ]);
+
+      return { items, total, page, pageSize };
+    });
+  }
+
+  findOne(id: string): Promise<CatalogShareWithClientAndProducts | null> {
+    return this.prisma.catalogShare.findUnique({
+      where: { id },
+      include: {
+        client: true,
+        products: {
+          include: { product: { include: { category: true } } },
+        },
+      },
+    });
+  }
+
+  async create(dto: CreateCatalogShareDto) {
+    const token = randomUUID();
+    const productIds = [...new Set(dto.productIds ?? [])];
+
+    return this.prisma.catalogShare.create({
+      data: {
+        token,
+        title: dto.title,
+        clientId: dto.clientId ?? null,
+        status: (dto.status as any) ?? 'ACTIVE',
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+        products: productIds.length
+          ? {
+              create: productIds.map((productId) => ({ productId })),
+            }
+          : undefined,
+      },
+      include: {
+        client: true,
+        products: { include: { product: true } },
+      },
+    });
+  }
+
+  update(id: string, dto: UpdateCatalogShareDto): Promise<CatalogShareWithClientAndProducts> {
+    return this.prisma.catalogShare.update({
+      where: { id },
+      data: {
+        ...(dto.title ? { title: dto.title } : {}),
+        ...(dto.clientId !== undefined ? { clientId: dto.clientId } : {}),
+        ...(dto.expiresAt !== undefined
+          ? { expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null }
+          : {}),
+        ...(dto.status ? { status: dto.status as any } : {}),
+      },
+      include: {
+        client: true,
+        products: { include: { product: true } },
+      },
+    });
+  }
+
+  async replaceProducts(id: string, dto: ReplaceCatalogShareProductsDto) {
+    const productIds = [...new Set(dto.productIds)];
+
+    return this.prisma.$transaction(async (tx) => {
+      const share = await tx.catalogShare.findUnique({ where: { id } });
+
+      if (!share) {
+        throw new NotFoundException('Catalog share not found.');
+      }
+
+      await tx.catalogShareProduct.deleteMany({
+        where: { catalogShareId: id },
+      });
+
+      await tx.catalogShareProduct.createMany({
+        data: productIds.map((productId) => ({
+          catalogShareId: id,
+          productId,
+        })),
+      });
+
+      return tx.catalogShare.findUnique({
+        where: { id },
+        include: {
+          client: true,
+          products: { include: { product: true } },
+        },
+      });
+    });
+  }
+
+  async removeProduct(id: string, productId: string) {
+    await this.prisma.catalogShareProduct.deleteMany({
+      where: { catalogShareId: id, productId },
+    });
+
+    return { message: 'Product removed from catalog share.' };
+  }
+
+  async getPublicByToken(token: string): Promise<CatalogShareWithPublicProducts> {
+    const share = await this.prisma.catalogShare.findUnique({
+      where: { token },
+      include: {
+        client: true,
+        products: {
+          include: { product: { include: { category: true } } },
+        },
+      },
+    });
+
+    if (!share) {
+      throw new NotFoundException('Catalog share not found.');
+    }
+
+    if (share.status !== 'ACTIVE') {
+      throw new BadRequestException('Catalog share is not active.');
+    }
+
+    if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('Catalog share has expired.');
+    }
+
+    await this.prisma.catalogShare.update({
+      where: { id: share.id },
+      data: {
+        viewCount: { increment: 1 },
+        lastViewedAt: new Date(),
+      },
+    });
+
+    return share;
+  }
+}

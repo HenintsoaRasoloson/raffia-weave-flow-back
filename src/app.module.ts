@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { ClientsModule } from './clients/clients.module';
+import { CatalogSharesModule } from './catalog-shares/catalog-shares.module';
 import { DeliveriesModule } from './deliveries/deliveries.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -14,6 +15,7 @@ import { SalesOrdersModule } from './sales-orders/sales-orders.module';
   imports: [
     PrismaModule,
     AuthModule,
+    CatalogSharesModule,
     ClientsModule,
     ProductsModule,
     SalesOrdersModule,
