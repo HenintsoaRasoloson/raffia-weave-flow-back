@@ -10,12 +10,15 @@ import {
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
+  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
 import { SalesOrderResponseDto } from './dto/sales-order-response.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
@@ -23,6 +26,8 @@ import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
 import { SalesOrdersService } from './sales-orders.service';
 
 @ApiTags('Commandes')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 @Controller('sales-orders')
 export class SalesOrdersController {
   constructor(private readonly salesOrdersService: SalesOrdersService) {}

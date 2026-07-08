@@ -8,6 +8,7 @@ export type PublicUser = {
   id: string;
   email: string;
   name: string | null;
+  isAdmin: boolean;
   createdAt: Date;
   updatedAt: Date;
 };

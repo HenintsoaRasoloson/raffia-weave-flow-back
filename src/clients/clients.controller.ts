@@ -10,11 +10,14 @@ import {
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
+  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ClientsService } from './clients.service';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ClientResponseDto } from './dto/client-response.dto';
@@ -22,6 +25,8 @@ import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 
 @ApiTags('Clients')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 @Controller('clients')
 export class ClientsController {
   constructor(private readonly clientsService: ClientsService) {}

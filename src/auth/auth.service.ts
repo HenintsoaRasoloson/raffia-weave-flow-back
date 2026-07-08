@@ -17,6 +17,7 @@ type AuthUserRecord = {
   id: string;
   email: string;
   name: string | null;
+  isAdmin: boolean;
   passwordHash: string;
   refreshTokenHash: string | null;
   failedLoginAttempts: number;
@@ -47,6 +48,7 @@ export class AuthService {
       data: {
         email,
         name: dto.name?.trim() || null,
+          isAdmin: false,
         passwordHash,
       },
     })) as AuthUserRecord;
@@ -177,6 +179,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
+      isAdmin: user.isAdmin,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

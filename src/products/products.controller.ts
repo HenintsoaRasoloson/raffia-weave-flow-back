@@ -10,18 +10,23 @@ import {
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
+  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductResponseDto } from './dto/product-response.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
 
 @ApiTags('Produits')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}

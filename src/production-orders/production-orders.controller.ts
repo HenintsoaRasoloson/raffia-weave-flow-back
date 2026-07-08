@@ -10,12 +10,15 @@ import {
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
+  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
 import { ProductionOrderResponseDto } from './dto/production-order-response.dto';
 import { UpdateProductionProgressDto } from './dto/update-production-progress.dto';
@@ -23,6 +26,8 @@ import { UpdateProductionOrderDto } from './dto/update-production-order.dto';
 import { ProductionOrdersService } from './production-orders.service';
 
 @ApiTags('Production')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 @Controller('production-orders')
 export class ProductionOrdersController {
   constructor(

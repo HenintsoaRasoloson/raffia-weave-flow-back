@@ -10,18 +10,23 @@ import {
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
+  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceResponseDto } from './dto/invoice-response.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoicesService } from './invoices.service';
 
 @ApiTags('Factures')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 @Controller('invoices')
 export class InvoicesController {
   constructor(private readonly invoicesService: InvoicesService) {}

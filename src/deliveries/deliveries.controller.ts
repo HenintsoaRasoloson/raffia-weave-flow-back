@@ -10,18 +10,23 @@ import {
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
+  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { DeliveryResponseDto } from './dto/delivery-response.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 import { DeliveriesService } from './deliveries.service';
 
 @ApiTags('Livraisons')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 @Controller('deliveries')
 export class DeliveriesController {
   constructor(private readonly deliveriesService: DeliveriesService) {}

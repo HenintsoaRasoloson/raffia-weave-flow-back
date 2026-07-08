@@ -11,6 +11,9 @@ export class AuthUserDto {
   name: string | null;
 
   @ApiProperty()
+  isAdmin: boolean;
+
+  @ApiProperty()
   createdAt: Date;
 
   @ApiProperty()
