@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
 import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
@@ -11,6 +12,7 @@ export class SalesOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   findAll(query: ListQueryDto) {
@@ -110,6 +112,24 @@ export class SalesOrdersService {
         },
       });
     }
+
+    // Notifier les rôles concernés
+    await this.notificationsService.notifyRoles(
+      ['GERANT', 'RESPONSABLE_GENERAL'],
+      {
+        type: 'sales_order_created',
+        title: 'Nouvelle commande client',
+        message: `Commande ${created.orderNumber} - ${created.client?.name ?? 'Client'} (${totalTtc.toFixed(2)} EUR)`,
+        data: {
+          orderId: created.id,
+          orderNumber: created.orderNumber,
+          clientName: created.client?.name,
+          totalTtc,
+        },
+        actionUrl: `/sales-orders/${created.id}`,
+        priority: 'normal',
+      },
+    );
 
     return created;
   }

@@ -1,0 +1,151 @@
+// NOTIFICATIONS SYSTEM - Usage Guide
+// =====================================
+
+/**
+
+- Le système de notifications WebSocket est complètement décentralisé:
+-
+- 1.  SETUP (déjà fait dans app.module.ts)
+- - NotificationsModule est importé dans AppModule
+- - NotificationsService est injecté dans les modules qui en ont besoin
+-
+- 2.  INJECTION DANS UN MODULE
+-
+- Ajouter NotificationsModule aux imports:
+-
+- @Module({
+-      imports: [NotificationsModule],
+-      providers: [MyService],
+- })
+- export class MyModule {}
+-
+- 3.  INJECTION DANS UN SERVICE
+-
+- constructor(
+-      private readonly notificationsService: NotificationsService,
+- ) {}
+-
+- 4.  ENVOYER DES NOTIFICATIONS
+-
+- a) Notification GLOBALE (tous les clients)
+-       await this.notificationsService.notifyGlobal({
+-         type: 'system_alert',
+-         title: 'Alerte système',
+-         message: 'Maintenance prévue à 22h',
+-         priority: 'high',
+-       });
+-
+- b) Notification PAR RÔLE (1 rôle)
+-       await this.notificationsService.notifyRole('GERANT', {
+-         type: 'high_value_order',
+-         title: 'Commande importante',
+-         message: `Commande $${amount} détectée`,
+-         data: { orderId, amount },
+-         actionUrl: `/sales-orders/${orderId}`,
+-       });
+-
+- c) Notification MULTI-RÔLES (plusieurs rôles)
+-       await this.notificationsService.notifyRoles(
+-         ['GERANT', 'RESPONSABLE_PRODUCTION'],
+-         {
+-           type: 'urgent_order',
+-           title: 'Commande urgente',
+-           message: 'Traitement prioritaire requis',
+-           priority: 'high',
+-         },
+-       );
+-
+- d) Notification À UN UTILISATEUR
+-       await this.notificationsService.notifyUser(userId, {
+-         type: 'order_ready',
+-         title: 'Votre commande est prête',
+-         message: 'Cliquez pour la voir',
+-         actionUrl: `/orders/${orderId}`,
+-       });
+-
+- 5.  UTILISATION AU CLIENT (WebSocket)
+-
+- // Connexion et authentification
+- const socket = io('http://localhost:3000/notifications');
+- socket.emit('authenticate', { token: jwtToken });
+-
+- // Écouter les notifications
+- socket.on('notification:global', (notif) => {
+-      console.log('Global:', notif);
+- });
+-
+- socket.on('notification:role', (notif) => {
+-      console.log('For my role:', notif);
+- });
+-
+- socket.on('notification:user', (notif) => {
+-      console.log('Personal:', notif);
+- });
+-
+- 6.  EXAMPLE COMPLET: Intégration dans InvoicesService
+-
+- @Module({
+-      imports: [NotificationsModule],
+-      providers: [InvoicesService],
+- })
+- export class InvoicesModule {}
+-
+- @Injectable()
+- export class InvoicesService {
+-      constructor(
+-        private readonly prisma: PrismaService,
+-        private readonly notificationsService: NotificationsService,
+-      ) {}
+-
+-      async recordPayment(id: string, dto: RecordPaymentDto, userId?: string) {
+-        const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+-
+-        // Enregistrer le paiement
+-        const updated = await this.prisma.invoice.update({
+-          where: { id },
+-          data: { paidAmount: {...} },
+-        });
+-
+-        // Notifier selon le montant
+-        if (dto.amount > 10000) {
+-          await this.notificationsService.notifyRole('GERANT', {
+-            type: 'large_payment',
+-            title: 'Paiement important reçu',
+-            message: `${dto.amount} EUR pour facture ${invoice.invoiceNumber}`,
+-            data: { invoiceId: id, amount: dto.amount },
+-            actionUrl: `/invoices/${id}`,
+-            priority: 'high',
+-          });
+-        }
+-
+-        // Toujours notifier le service financier
+-        await this.notificationsService.notifyRole('RESPONSABLE_FINANCIER_STOCKS', {
+-          type: 'payment_recorded',
+-          title: 'Paiement enregistré',
+-          message: `${dto.amount} EUR`,
+-          data: { invoiceId: id },
+-          actionUrl: `/invoices/${id}`,
+-        });
+-
+-        return updated;
+-      }
+- }
+-
+- 7.  NOTES DE PERFORMANCE
+-
+- - Les notifications sont envoyées SANS attendre (fire-and-forget recommandé)
+- - Socket.IO gère la distribution efficace par rooms (Socket.IO internals)
+- - Chaque client rejoint automatiquement sa room de rôle à l'authentification
+- - Les notifications ne bloquent jamais le flux métier principal
+- - Pas de stockage en BD (real-time only) = très léger
+-
+- 8.  RÔLES DISPONIBLES
+-
+- - GERANT
+- - RESPONSABLE_GENERAL
+- - RESPONSABLE_PRODUCTION
+- - RESPONSABLE_LIVRAISON
+- - RESPONSABLE_FINANCIER_STOCKS
+    */
+
+export {};

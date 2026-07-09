@@ -16,6 +16,7 @@ import { SalesOrdersModule } from './sales-orders/sales-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { AuditService } from './common/audit.service';
 import { AuditController } from './common/audit.controller';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AuditController } from './common/audit.controller';
     ProductionOrdersModule,
     DeliveriesModule,
     InvoicesModule,
+    NotificationsModule,
   ],
   controllers: [AppController, AuditController],
   providers: [AppService, AuditService],
