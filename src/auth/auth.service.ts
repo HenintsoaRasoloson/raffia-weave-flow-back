@@ -30,6 +30,7 @@ type AuthUserRecord = {
 @Injectable()
 export class AuthService {
   private readonly authConfig = getAuthConfig();
+  private static readonly INVALID_CREDENTIALS_MESSAGE = 'Invalid credentials.';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -65,7 +66,7 @@ export class AuthService {
     })) as AuthUserRecord | null;
 
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials.');
+      throw new UnauthorizedException(AuthService.INVALID_CREDENTIALS_MESSAGE);
     }
 
     await this.assertNotLocked(user);
@@ -74,7 +75,7 @@ export class AuthService {
 
     if (!passwordMatches) {
       await this.registerFailedAttempt(user);
-      throw new UnauthorizedException('Invalid credentials.');
+      throw new UnauthorizedException(AuthService.INVALID_CREDENTIALS_MESSAGE);
     }
 
     await this.resetLoginState(user.id);
@@ -195,7 +196,7 @@ export class AuthService {
 
   private async assertNotLocked(user: AuthUserRecord) {
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
-      throw new ForbiddenException('Account temporarily locked.');
+      throw new ForbiddenException(AuthService.INVALID_CREDENTIALS_MESSAGE);
     }
   }
 
@@ -211,7 +212,7 @@ export class AuthService {
         },
       });
 
-      throw new ForbiddenException('Account temporarily locked.');
+      throw new ForbiddenException(AuthService.INVALID_CREDENTIALS_MESSAGE);
     }
 
     await this.prisma.user.update({
