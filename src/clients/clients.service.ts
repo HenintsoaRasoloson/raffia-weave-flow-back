@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compression.util';
@@ -75,7 +75,63 @@ export class ClientsService {
     return this.prisma.clientFiscalCard.findMany({
       where: { clientId },
       orderBy: { createdAt: 'desc' },
+    }).then((items) =>
+      items.map((item) => ({
+        ...item,
+        version: this.extractVersion(item.objectKey ?? item.storagePath),
+      })),
+    );
+  }
+
+  async deleteFiscalCard(clientId: string, cardId: string) {
+    const card = await this.prisma.clientFiscalCard.findFirst({
+      where: { id: cardId, clientId },
     });
+    if (!card) {
+      throw new NotFoundException('Carte fiscale introuvable');
+    }
+
+    await this.removeStoredObject(card);
+    await this.prisma.clientFiscalCard.delete({ where: { id: cardId } });
+    return { id: cardId, deleted: true };
+  }
+
+  async replaceFiscalCard(
+    clientId: string,
+    cardId: string,
+    file: Express.Multer.File,
+    userId?: string,
+    validUntil?: string,
+  ) {
+    const existing = await this.prisma.clientFiscalCard.findFirst({
+      where: { id: cardId, clientId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Carte fiscale introuvable');
+    }
+    if (!file) {
+      throw new BadRequestException('Aucun fichier reçu. Champ attendu: file');
+    }
+
+    const nextVersion =
+      this.extractVersion(existing.objectKey ?? existing.storagePath) + 1;
+
+    const created = await this.uploadFiscalCard(
+      clientId,
+      {
+        validUntil: validUntil ?? existing.validUntil.toISOString(),
+      },
+      file,
+      userId,
+      { version: nextVersion },
+    );
+
+    return {
+      replacedCardId: cardId,
+      newCardId: created.id,
+      version: nextVersion,
+      fiscalCard: created,
+    };
   }
 
   async uploadFiscalCard(
@@ -83,6 +139,7 @@ export class ClientsService {
     dto: UploadClientFiscalCardDto,
     file: Express.Multer.File,
     userId?: string,
+    options?: { version?: number },
   ) {
     const client = await this.prisma.client.findUnique({
       where: { id: clientId },
@@ -111,6 +168,7 @@ export class ClientsService {
       entityId: clientId,
       documentType: 'fiscal_card',
       originalFileName: file.originalname,
+      version: options?.version,
     });
 
     let bucket: string | null = null;
@@ -203,6 +261,30 @@ export class ClientsService {
 
     if (!client) {
       throw new NotFoundException('Client introuvable');
+    }
+  }
+
+  private extractVersion(pathLike?: string | null): number {
+    if (!pathLike) return 1;
+    const match = pathLike.match(/\/v(\d+)\//);
+    return match ? Number(match[1]) : 1;
+  }
+
+  private async removeStoredObject(card: {
+    bucket: string | null;
+    objectKey: string | null;
+    storagePath: string | null;
+  }) {
+    if (card.bucket && card.objectKey && this.minioService.isEnabled()) {
+      await this.minioService.removeObject({
+        bucket: card.bucket,
+        key: card.objectKey,
+      });
+      return;
+    }
+
+    if (card.storagePath) {
+      await unlink(card.storagePath).catch(() => undefined);
     }
   }
 }

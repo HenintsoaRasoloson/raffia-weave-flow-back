@@ -164,6 +164,59 @@ export class InvoicesController {
     return new StreamableFile(doc.buffer);
   }
 
+  @Post(':id/documents/:documentId/replace')
+  @UseGuards(AdminGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
+      fileFilter: (_, file, cb) => {
+        const allowed = [
+          'application/pdf',
+          'image/png',
+          'image/jpeg',
+          'image/webp',
+        ];
+        cb(null, allowed.includes(file.mimetype));
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Remplacer un document facture (nouvelle version)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  replaceDocument(
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.invoicesService.replaceDocument(id, documentId, file, user.sub);
+  }
+
+  @Delete(':id/documents/:documentId')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Supprimer un document facture' })
+  @ApiOkResponse({ description: 'Document facture supprimé' })
+  deleteDocument(
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.invoicesService.deleteDocument(id, documentId);
+  }
+
   @Post()
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Créer une facture' })

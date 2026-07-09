@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -77,7 +77,60 @@ export class InvoicesService {
     return this.prisma.invoiceDocument.findMany({
       where: { invoiceId },
       orderBy: { createdAt: 'desc' },
+    }).then((items) =>
+      items.map((item) => ({
+        ...item,
+        version: this.extractVersion(item.objectKey ?? item.storagePath),
+      })),
+    );
+  }
+
+  async deleteDocument(invoiceId: string, documentId: string) {
+    const document = await this.prisma.invoiceDocument.findFirst({
+      where: { id: documentId, invoiceId },
     });
+    if (!document) {
+      throw new NotFoundException('Document de facture introuvable');
+    }
+
+    await this.removeStoredObject(document);
+    await this.prisma.invoiceDocument.delete({ where: { id: documentId } });
+    return { id: documentId, deleted: true };
+  }
+
+  async replaceDocument(
+    invoiceId: string,
+    documentId: string,
+    file: Express.Multer.File,
+    userId?: string,
+  ) {
+    const existing = await this.prisma.invoiceDocument.findFirst({
+      where: { id: documentId, invoiceId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Document de facture introuvable');
+    }
+    if (!file) {
+      throw new BadRequestException('Aucun fichier reçu. Champ attendu: file');
+    }
+
+    const nextVersion =
+      this.extractVersion(existing.objectKey ?? existing.storagePath) + 1;
+
+    const created = await this.uploadDocument(
+      invoiceId,
+      { kind: existing.kind as any },
+      file,
+      userId,
+      { version: nextVersion },
+    );
+
+    return {
+      replacedDocumentId: documentId,
+      newDocumentId: created.id,
+      version: nextVersion,
+      document: created,
+    };
   }
 
   async uploadDocument(
@@ -85,6 +138,7 @@ export class InvoicesService {
     dto: UploadInvoiceDocumentDto,
     file: Express.Multer.File,
     userId?: string,
+    options?: { version?: number },
   ) {
     await this.ensureInvoiceExists(invoiceId);
     if (!file) {
@@ -102,6 +156,7 @@ export class InvoicesService {
       entityId: invoiceId,
       documentType: `signed-${dto.kind.toLowerCase()}`,
       originalFileName: file.originalname,
+      version: options?.version,
     });
 
     const storedName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
@@ -537,6 +592,30 @@ export class InvoicesService {
 
     if (!invoice) {
       throw new NotFoundException('Facture introuvable');
+    }
+  }
+
+  private extractVersion(pathLike?: string | null): number {
+    if (!pathLike) return 1;
+    const match = pathLike.match(/\/v(\d+)\//);
+    return match ? Number(match[1]) : 1;
+  }
+
+  private async removeStoredObject(document: {
+    bucket: string | null;
+    objectKey: string | null;
+    storagePath: string | null;
+  }) {
+    if (document.bucket && document.objectKey && this.minioService.isEnabled()) {
+      await this.minioService.removeObject({
+        bucket: document.bucket,
+        key: document.objectKey,
+      });
+      return;
+    }
+
+    if (document.storagePath) {
+      await unlink(document.storagePath).catch(() => undefined);
     }
   }
 }

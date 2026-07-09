@@ -34,6 +34,7 @@ import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.d
 import { ClientsService } from './clients.service';
 import { ClientResponseDto } from './dto/client-response.dto';
 import { CreateClientDto } from './dto/create-client.dto';
+import { ReplaceClientFiscalCardDto } from './dto/replace-client-fiscal-card.dto';
 import { UploadClientFiscalCardDto } from './dto/upload-client-fiscal-card.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 
@@ -111,6 +112,57 @@ export class ClientsController {
     res.setHeader('Content-Type', card.mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${card.originalName}"`);
     return new StreamableFile(card.buffer);
+  }
+
+  @Post(':id/fiscal-cards/:cardId/replace')
+  @UseGuards(AdminGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_, file, cb) => {
+        const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+        cb(null, allowed.includes(file.mimetype));
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Remplacer une carte fiscale (nouvelle version)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        validUntil: { type: 'string', format: 'date-time' },
+        file: { type: 'string', format: 'binary' },
+      },
+      required: ['file'],
+    },
+  })
+  replaceFiscalCard(
+    @Param('id') id: string,
+    @Param('cardId') cardId: string,
+    @Body() dto: ReplaceClientFiscalCardDto,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.clientsService.replaceFiscalCard(
+      id,
+      cardId,
+      file,
+      user.sub,
+      dto.validUntil,
+    );
+  }
+
+  @Delete(':id/fiscal-cards/:cardId')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Supprimer une carte fiscale' })
+  @ApiOkResponse({ description: 'Carte fiscale supprimée' })
+  deleteFiscalCard(
+    @Param('id') id: string,
+    @Param('cardId') cardId: string,
+  ) {
+    return this.clientsService.deleteFiscalCard(id, cardId);
   }
 
   @Post()

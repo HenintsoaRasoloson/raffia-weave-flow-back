@@ -128,6 +128,59 @@ export class SalesOrdersController {
     return new StreamableFile(document.buffer);
   }
 
+  @Post(':id/bat-documents/:documentId/replace')
+  @UseGuards(AdminGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 20 * 1024 * 1024 },
+      fileFilter: (_, file, cb) => {
+        const allowed = [
+          'application/pdf',
+          'image/png',
+          'image/jpeg',
+          'image/webp',
+        ];
+        cb(null, allowed.includes(file.mimetype));
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Remplacer un document BAT (nouvelle version)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+      required: ['file'],
+    },
+  })
+  replaceBatDocument(
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.salesOrdersService.replaceBatDocument(
+      id,
+      documentId,
+      file,
+      user.sub,
+    );
+  }
+
+  @Delete(':id/bat-documents/:documentId')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Supprimer un document BAT' })
+  @ApiOkResponse({ description: 'Document BAT supprimé' })
+  deleteBatDocument(
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.salesOrdersService.deleteBatDocument(id, documentId);
+  }
+
   @Post()
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Créer une commande' })

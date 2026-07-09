@@ -9,6 +9,7 @@ import {
   Query,
   Res,
   StreamableFile,
+  UploadedFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -23,7 +24,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Response } from 'express';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../auth/auth.types';
@@ -113,6 +114,49 @@ export class ProductsController {
     res.setHeader('Content-Type', image.mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${image.originalName}"`);
     return new StreamableFile(image.buffer);
+  }
+
+  @Post(':id/images/:imageId/replace')
+  @UseGuards(AdminGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_, file, cb) => {
+        const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+        cb(null, allowed.includes(file.mimetype));
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Remplacer une image produit (nouvelle version)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+      required: ['file'],
+    },
+  })
+  replaceImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.productsService.replaceImage(id, imageId, file, user.sub);
+  }
+
+  @Delete(':id/images/:imageId')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Supprimer une image produit' })
+  @ApiOkResponse({ description: 'Image supprimée' })
+  deleteImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+  ) {
+    return this.productsService.deleteImage(id, imageId);
   }
 
   @Post()

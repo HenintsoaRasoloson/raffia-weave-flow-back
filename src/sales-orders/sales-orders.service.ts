@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -75,7 +75,61 @@ export class SalesOrdersService {
     return this.prisma.batDocument.findMany({
       where: { salesOrderId },
       orderBy: { createdAt: 'desc' },
+    }).then((items) =>
+      items.map((item) => ({
+        ...item,
+        version: this.extractVersion(item.objectKey ?? item.storagePath),
+      })),
+    );
+  }
+
+  async deleteBatDocument(salesOrderId: string, documentId: string) {
+    const document = await this.prisma.batDocument.findFirst({
+      where: { id: documentId, salesOrderId },
     });
+    if (!document) {
+      throw new NotFoundException('Document BAT introuvable');
+    }
+
+    await this.removeStoredObject(document);
+    await this.prisma.batDocument.delete({ where: { id: documentId } });
+
+    return { id: documentId, deleted: true };
+  }
+
+  async replaceBatDocument(
+    salesOrderId: string,
+    documentId: string,
+    file: Express.Multer.File,
+    userId?: string,
+  ) {
+    const existing = await this.prisma.batDocument.findFirst({
+      where: { id: documentId, salesOrderId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Document BAT introuvable');
+    }
+    if (!file) {
+      throw new BadRequestException('Aucun fichier BAT reçu.');
+    }
+
+    const nextVersion =
+      this.extractVersion(existing.objectKey ?? existing.storagePath) + 1;
+
+    const created = await this.uploadBatDocument(
+      salesOrderId,
+      { kind: existing.kind as any },
+      file,
+      userId,
+      { version: nextVersion },
+    );
+
+    return {
+      replacedDocumentId: documentId,
+      newDocumentId: created.id,
+      version: nextVersion,
+      document: created,
+    };
   }
 
   async uploadBatDocument(
@@ -83,6 +137,7 @@ export class SalesOrdersService {
     dto: UploadBatDocumentDto,
     file: Express.Multer.File,
     userId?: string,
+    options?: { version?: number },
   ) {
     const order = await this.prisma.salesOrder.findUnique({
       where: { id: salesOrderId },
@@ -110,6 +165,7 @@ export class SalesOrdersService {
       entityId: salesOrderId,
       documentType: `bat-${dto.kind.toLowerCase()}`,
       originalFileName: file.originalname,
+      version: options?.version,
     });
 
     let bucket: string | null = null;
@@ -394,6 +450,30 @@ export class SalesOrdersService {
     });
     if (!order) {
       throw new NotFoundException('Commande introuvable');
+    }
+  }
+
+  private extractVersion(pathLike?: string | null): number {
+    if (!pathLike) return 1;
+    const match = pathLike.match(/\/v(\d+)\//);
+    return match ? Number(match[1]) : 1;
+  }
+
+  private async removeStoredObject(document: {
+    bucket: string | null;
+    objectKey: string | null;
+    storagePath: string | null;
+  }) {
+    if (document.bucket && document.objectKey && this.minioService.isEnabled()) {
+      await this.minioService.removeObject({
+        bucket: document.bucket,
+        key: document.objectKey,
+      });
+      return;
+    }
+
+    if (document.storagePath) {
+      await unlink(document.storagePath).catch(() => undefined);
     }
   }
 }

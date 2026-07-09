@@ -1,8 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { ListQueryDto } from '../common/dto/list-query.dto';
-import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compression.util';
+import {
+  compressBufferIfNeeded,
+  decompressBufferIfNeeded,
+} from '../ged/compression.util';
 import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
 import { GedPathsService } from '../ged/ged-paths.service';
 import { MinioService } from '../ged/minio.service';
@@ -50,38 +53,49 @@ export class ProductsService {
   }
 
   findOne(id: string) {
-    return this.prisma.product.findUnique({
-      where: { id },
-      include: {
-        category: true,
-        variants: true,
-        bomItems: true,
-        productImages: { orderBy: { createdAt: 'desc' } },
-      },
-    }).then((product) => {
-      if (!product) return product;
-      return {
-        ...product,
-        productImages: product.productImages.map((image) => ({
-          ...image,
-          decompressedUrl: `/products/${id}/images/${image.id}`,
-        })),
-      };
-    });
+    return this.prisma.product
+      .findUnique({
+        where: { id },
+        include: {
+          category: true,
+          variants: true,
+          bomItems: true,
+          productImages: { orderBy: { createdAt: 'desc' } },
+        },
+      })
+      .then((product) => {
+        if (!product) return product;
+        return {
+          ...product,
+          productImages: product.productImages.map((image) => ({
+            ...image,
+            version: this.extractVersion(image.objectKey ?? image.storagePath),
+            decompressedUrl: `/products/${id}/images/${image.id}`,
+          })),
+        };
+      });
   }
 
   async listImages(productId: string) {
     await this.ensureProductExists(productId);
-    return this.prisma.productImage.findMany({
-      where: { productId },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.prisma.productImage
+      .findMany({
+        where: { productId },
+        orderBy: { createdAt: 'desc' },
+      })
+      .then((items) =>
+        items.map((item) => ({
+          ...item,
+          version: this.extractVersion(item.objectKey ?? item.storagePath),
+        })),
+      );
   }
 
   async uploadImages(
     productId: string,
     files: Express.Multer.File[],
     userId?: string,
+    options?: { version?: number; documentType?: string },
   ) {
     await this.ensureProductExists(productId);
     if (!files?.length) {
@@ -99,8 +113,9 @@ export class ProductsService {
           domain: 'admin',
           entityType: 'product',
           entityId: productId,
-          documentType: 'image',
+          documentType: options?.documentType ?? 'image',
           originalFileName: file.originalname,
+          version: options?.version,
         });
 
         let storagePath: string | null = null;
@@ -141,6 +156,53 @@ export class ProductsService {
     );
 
     return created;
+  }
+
+  async replaceImage(
+    productId: string,
+    imageId: string,
+    file: Express.Multer.File,
+    userId?: string,
+  ) {
+    const existing = await this.prisma.productImage.findFirst({
+      where: { id: imageId, productId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Image produit introuvable');
+    }
+    if (!file) {
+      throw new BadRequestException('Aucun fichier image reçu.');
+    }
+
+    const nextVersion =
+      this.extractVersion(existing.objectKey ?? existing.storagePath) + 1;
+
+    const [created] = await this.uploadImages(productId, [file], userId, {
+      version: nextVersion,
+      documentType: 'image',
+    });
+
+    return {
+      replacedImageId: imageId,
+      newImageId: created.id,
+      version: nextVersion,
+      image: created,
+    };
+  }
+
+  async deleteImage(productId: string, imageId: string) {
+    const image = await this.prisma.productImage.findFirst({
+      where: { id: imageId, productId },
+    });
+
+    if (!image) {
+      throw new NotFoundException('Image produit introuvable');
+    }
+
+    await this.removeStoredObject(image);
+    await this.prisma.productImage.delete({ where: { id: imageId } });
+
+    return { id: imageId, deleted: true };
   }
 
   async getImageBinary(productId: string, imageId: string) {
@@ -201,6 +263,30 @@ export class ProductsService {
 
     if (!product) {
       throw new NotFoundException('Produit introuvable');
+    }
+  }
+
+  private extractVersion(pathLike?: string | null): number {
+    if (!pathLike) return 1;
+    const match = pathLike.match(/\/v(\d+)\//);
+    return match ? Number(match[1]) : 1;
+  }
+
+  private async removeStoredObject(image: {
+    bucket: string | null;
+    objectKey: string | null;
+    storagePath: string | null;
+  }) {
+    if (image.bucket && image.objectKey && this.minioService.isEnabled()) {
+      await this.minioService.removeObject({
+        bucket: image.bucket,
+        key: image.objectKey,
+      });
+      return;
+    }
+
+    if (image.storagePath) {
+      await unlink(image.storagePath).catch(() => undefined);
     }
   }
 }
