@@ -6,6 +6,7 @@ import { BomItemsModule } from './bom-items/bom-items.module';
 import { ClientsModule } from './clients/clients.module';
 import { ComponentsModule } from './components/components.module';
 import { CatalogSharesModule } from './catalog-shares/catalog-shares.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { DeliveriesModule } from './deliveries/deliveries.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -24,6 +25,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     AuthModule,
     CatalogSharesModule,
     ClientsModule,
+    DashboardModule,
     SuppliersModule,
     ComponentsModule,
     BomItemsModule,
