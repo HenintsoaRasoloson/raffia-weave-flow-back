@@ -62,13 +62,6 @@ export class ProductsService {
           variants: true,
           bomItems: true,
           productImages: { orderBy: { createdAt: 'desc' } },
-          technicalSheet: {
-            include: {
-              elements: {
-                orderBy: { sequence: 'asc' },
-              },
-            },
-          },
         },
       })
       .then((product) => {
