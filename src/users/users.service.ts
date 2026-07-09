@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTableTextWhere } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -13,17 +14,18 @@ import { UpdateUserDto } from './dto/update-user.dto';
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const where = query.q
-      ? {
-          OR: [
-            { email: { contains: query.q, mode: 'insensitive' as const } },
-            { name: { contains: query.q, mode: 'insensitive' as const } },
-          ],
-        }
-      : {};
+    const textWhere = await buildFrenchTableTextWhere(
+      this.prisma,
+      'User',
+      ['email', 'name'],
+      query.q,
+    );
+    const where = {
+      ...textWhere,
+    };
 
     return this.prisma.$transaction(async (tx) => {
       const [items, total] = await Promise.all([

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { UpdateComponentDto } from './dto/update-component.dto';
@@ -8,18 +9,15 @@ import { UpdateComponentDto } from './dto/update-component.dto';
 export class ComponentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const textOr = await buildFrenchTextSearchOr(this.prisma, {
+      term: query.q,
+      scalarFields: ['ref', 'name'],
+    });
     const where = {
-      ...(query.q
-        ? {
-            OR: [
-              { ref: { contains: query.q } },
-              { name: { contains: query.q } },
-            ],
-          }
-        : {}),
+      ...(textOr ? { OR: textOr } : {}),
     };
 
     return this.prisma.$transaction(async (tx) => {

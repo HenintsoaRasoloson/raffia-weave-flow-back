@@ -1,5 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  buildFrenchTableTextWhere,
+  containsFilter,
+  equalsFilter,
+  prepareSearchTerm,
+  resolveFrenchTextSearchIds,
+} from '../common/query/search.util';
 import { GlobalSearchQueryDto } from './dto/global-search-query.dto';
 
 const ALL_ENTITIES = GlobalSearchQueryDto.AllowedEntities;
@@ -24,7 +31,7 @@ export class SearchService {
 
   async globalSearch(query: GlobalSearchQueryDto) {
     const startedAt = Date.now();
-    const q = query.q?.trim() ?? '';
+    const q = prepareSearchTerm(query.q) ?? '';
     const limit = query.limit ?? 8;
     const entities = this.resolveEntities(query.entities);
     const matchMode = query.matchMode ?? 'contains';
@@ -228,10 +235,10 @@ export class SearchService {
     }
 
     if (mode === 'exact') {
-      return { equals: q, mode: 'insensitive' as const };
+      return equalsFilter(q);
     }
 
-    return { contains: q, mode: 'insensitive' as const };
+    return containsFilter(q);
   }
 
   private async searchProducts(input: {
@@ -242,18 +249,24 @@ export class SearchService {
     categoryId?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
   }): Promise<SearchHit[]> {
-    const textMatch = this.buildStringMatch(input.q, input.matchMode);
+    const q = prepareSearchTerm(input.q);
+    const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
+    const nameIds = q
+      ? await resolveFrenchTextSearchIds(this.prisma, 'Product', ['name'], q)
+      : [];
+    const textOr = textMatch
+      ? [
+          { ref: textMatch },
+          ...(nameIds.length ? [{ id: { in: nameIds } }] : []),
+        ]
+      : undefined;
 
     const rows = await this.prisma.product.findMany({
       where: {
         ...(input.status ? { status: input.status as any } : {}),
         ...(input.categoryId ? { categoryId: input.categoryId } : {}),
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
-        ...(textMatch
-          ? {
-              OR: [{ ref: textMatch }, { name: textMatch }],
-            }
-          : {}),
+        ...(textOr ? { OR: textOr } : {}),
       },
       select: {
         id: true,
@@ -283,20 +296,16 @@ export class SearchService {
     status?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
   }): Promise<SearchHit[]> {
-    const q = input.q;
+    const q = prepareSearchTerm(input.q);
+    const textWhere = q
+      ? await buildFrenchTableTextWhere(this.prisma, 'Client', ['name', 'email', 'contactName'], q)
+      : {};
+
     const rows = await this.prisma.client.findMany({
       where: {
         ...(input.status ? { status: input.status as any } : {}),
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
-        ...(q
-          ? {
-              OR: [
-                { name: { contains: q, mode: 'insensitive' } },
-                { email: { contains: q, mode: 'insensitive' } },
-                { contactName: { contains: q, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
+        ...textWhere,
       },
       select: {
         id: true,
@@ -324,19 +333,15 @@ export class SearchService {
     limit: number;
     createdAtFilter?: { gte?: Date; lte?: Date };
   }): Promise<SearchHit[]> {
-    const q = input.q;
+    const q = prepareSearchTerm(input.q);
+    const textWhere = q
+      ? await buildFrenchTableTextWhere(this.prisma, 'Supplier', ['name', 'email', 'category'], q)
+      : {};
+
     const rows = await this.prisma.supplier.findMany({
       where: {
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
-        ...(q
-          ? {
-              OR: [
-                { name: { contains: q, mode: 'insensitive' } },
-                { email: { contains: q, mode: 'insensitive' } },
-                { category: { contains: q, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
+        ...textWhere,
       },
       select: {
         id: true,
@@ -365,17 +370,23 @@ export class SearchService {
     supplierId?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
   }): Promise<SearchHit[]> {
-    const textMatch = this.buildStringMatch(input.q, input.matchMode);
+    const q = prepareSearchTerm(input.q);
+    const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
+    const nameIds = q
+      ? await resolveFrenchTextSearchIds(this.prisma, 'Component', ['name'], q)
+      : [];
+    const textOr = textMatch
+      ? [
+          { ref: textMatch },
+          ...(nameIds.length ? [{ id: { in: nameIds } }] : []),
+        ]
+      : undefined;
 
     const rows = await this.prisma.component.findMany({
       where: {
         ...(input.supplierId ? { supplierId: input.supplierId } : {}),
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
-        ...(textMatch
-          ? {
-              OR: [{ ref: textMatch }, { name: textMatch }],
-            }
-          : {}),
+        ...(textOr ? { OR: textOr } : {}),
       },
       select: {
         id: true,
@@ -407,7 +418,17 @@ export class SearchService {
     createdAtFilter?: { gte?: Date; lte?: Date };
     referenceLevel?: number;
   }): Promise<SearchHit[]> {
-    const textMatch = this.buildStringMatch(input.q, input.matchMode);
+    const q = prepareSearchTerm(input.q);
+    const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
+    const clientIds = q
+      ? await resolveFrenchTextSearchIds(this.prisma, 'Client', ['name'], q)
+      : [];
+    const textOr = textMatch
+      ? [
+          { orderNumber: textMatch },
+          ...(clientIds.length ? [{ clientId: { in: clientIds } }] : []),
+        ]
+      : undefined;
 
     const rows = await this.prisma.salesOrder.findMany({
       where: {
@@ -418,14 +439,7 @@ export class SearchService {
         ...(input.referenceLevel !== undefined
           ? { referenceLevel: input.referenceLevel }
           : {}),
-        ...(textMatch
-          ? {
-              OR: [
-                { orderNumber: textMatch },
-                { client: { is: { name: { contains: input.q, mode: 'insensitive' } } } },
-              ],
-            }
-          : {}),
+        ...(textOr ? { OR: textOr } : {}),
       },
       select: {
         id: true,
@@ -463,7 +477,17 @@ export class SearchService {
     createdAtFilter?: { gte?: Date; lte?: Date };
     referenceLevel?: number;
   }): Promise<SearchHit[]> {
-    const textMatch = this.buildStringMatch(input.q, input.matchMode);
+    const q = prepareSearchTerm(input.q);
+    const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
+    const clientIds = q
+      ? await resolveFrenchTextSearchIds(this.prisma, 'Client', ['name'], q)
+      : [];
+    const textOr = textMatch
+      ? [
+          { invoiceNumber: textMatch },
+          ...(clientIds.length ? [{ clientId: { in: clientIds } }] : []),
+        ]
+      : undefined;
 
     const rows = await this.prisma.invoice.findMany({
       where: {
@@ -474,14 +498,7 @@ export class SearchService {
         ...(input.referenceLevel !== undefined
           ? { referenceLevel: input.referenceLevel }
           : {}),
-        ...(textMatch
-          ? {
-              OR: [
-                { invoiceNumber: textMatch },
-                { client: { is: { name: { contains: input.q, mode: 'insensitive' } } } },
-              ],
-            }
-          : {}),
+        ...(textOr ? { OR: textOr } : {}),
       },
       select: {
         id: true,
@@ -518,7 +535,17 @@ export class SearchService {
     createdAtFilter?: { gte?: Date; lte?: Date };
     referenceLevel?: number;
   }): Promise<SearchHit[]> {
-    const textMatch = this.buildStringMatch(input.q, input.matchMode);
+    const q = prepareSearchTerm(input.q);
+    const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
+    const clientIds = q
+      ? await resolveFrenchTextSearchIds(this.prisma, 'Client', ['name'], q)
+      : [];
+    const textOr = textMatch
+      ? [
+          { deliveryNumber: textMatch },
+          ...(clientIds.length ? [{ clientId: { in: clientIds } }] : []),
+        ]
+      : undefined;
 
     const rows = await this.prisma.delivery.findMany({
       where: {
@@ -528,14 +555,7 @@ export class SearchService {
         ...(input.referenceLevel !== undefined
           ? { referenceLevel: input.referenceLevel }
           : {}),
-        ...(textMatch
-          ? {
-              OR: [
-                { deliveryNumber: textMatch },
-                { client: { is: { name: { contains: input.q, mode: 'insensitive' } } } },
-              ],
-            }
-          : {}),
+        ...(textOr ? { OR: textOr } : {}),
       },
       select: {
         id: true,
@@ -569,7 +589,17 @@ export class SearchService {
     createdAtFilter?: { gte?: Date; lte?: Date };
     referenceLevel?: number;
   }): Promise<SearchHit[]> {
-    const textMatch = this.buildStringMatch(input.q, input.matchMode);
+    const q = prepareSearchTerm(input.q);
+    const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
+    const productIds = q
+      ? await resolveFrenchTextSearchIds(this.prisma, 'Product', ['name'], q)
+      : [];
+    const textOr = textMatch
+      ? [
+          { orderNumber: textMatch },
+          ...(productIds.length ? [{ productId: { in: productIds } }] : []),
+        ]
+      : undefined;
 
     const rows = await this.prisma.productionOrder.findMany({
       where: {
@@ -578,14 +608,7 @@ export class SearchService {
         ...(input.referenceLevel !== undefined
           ? { referenceLevel: input.referenceLevel }
           : {}),
-        ...(textMatch
-          ? {
-              OR: [
-                { orderNumber: textMatch },
-                { product: { is: { name: { contains: input.q, mode: 'insensitive' } } } },
-              ],
-            }
-          : {}),
+        ...(textOr ? { OR: textOr } : {}),
       },
       select: {
         id: true,
@@ -620,7 +643,17 @@ export class SearchService {
     createdAtFilter?: { gte?: Date; lte?: Date };
     referenceLevel?: number;
   }): Promise<SearchHit[]> {
-    const textMatch = this.buildStringMatch(input.q, input.matchMode);
+    const q = prepareSearchTerm(input.q);
+    const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
+    const supplierIds = q
+      ? await resolveFrenchTextSearchIds(this.prisma, 'Supplier', ['name'], q)
+      : [];
+    const textOr = textMatch
+      ? [
+          { orderNumber: textMatch },
+          ...(supplierIds.length ? [{ supplierId: { in: supplierIds } }] : []),
+        ]
+      : undefined;
 
     const rows = await this.prisma.purchaseOrder.findMany({
       where: {
@@ -630,14 +663,7 @@ export class SearchService {
         ...(input.referenceLevel !== undefined
           ? { referenceLevel: input.referenceLevel }
           : {}),
-        ...(textMatch
-          ? {
-              OR: [
-                { orderNumber: textMatch },
-                { supplier: { is: { name: { contains: input.q, mode: 'insensitive' } } } },
-              ],
-            }
-          : {}),
+        ...(textOr ? { OR: textOr } : {}),
       },
       select: {
         id: true,

@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { normalizeEnumParam, trimQueryValue } from '../../common/query/search.util';
 import {
   IsDateString,
   IsIn,
@@ -28,6 +29,7 @@ export class GlobalSearchQueryDto {
     example: 'PRO/000188',
   })
   @IsOptional()
+  @Transform(({ value }) => trimQueryValue(value))
   @IsString()
   q?: string;
 
@@ -58,6 +60,7 @@ export class GlobalSearchQueryDto {
     example: 'ACTIVE',
   })
   @IsOptional()
+  @Transform(({ value }) => normalizeEnumParam(value))
   @IsString()
   status?: string;
 
@@ -66,6 +69,7 @@ export class GlobalSearchQueryDto {
     example: 'PROFORMA',
   })
   @IsOptional()
+  @Transform(({ value }) => normalizeEnumParam(value))
   @IsString()
   type?: string;
 

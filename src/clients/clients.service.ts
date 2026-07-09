@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTableTextWhere } from '../common/query/search.util';
 import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compression.util';
 import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
 import { GedPathsService } from '../ged/ged-paths.service';
@@ -19,21 +20,19 @@ export class ClientsService {
     private readonly gedPathsService: GedPathsService,
   ) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const textWhere = await buildFrenchTableTextWhere(
+      this.prisma,
+      'Client',
+      ['name', 'email', 'contactName'],
+      query.q,
+    );
     const where = {
       ...(query.status ? { status: query.status as any } : {}),
       ...(query.type ? { type: query.type as any } : {}),
-      ...(query.q
-        ? {
-            OR: [
-              { name: { contains: query.q } },
-              { email: { contains: query.q } },
-              { contactName: { contains: query.q } },
-            ],
-          }
-        : {}),
+      ...textWhere,
     };
 
     return this.prisma.$transaction(async (tx) => {

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import {
   compressBufferIfNeeded,
   decompressBufferIfNeeded,
@@ -22,21 +23,18 @@ export class ProductsService {
     private readonly gedPathsService: GedPathsService,
   ) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const includeVariants = query.includeVariants ?? false;
     const compactFields = query.fields === 'compact';
+    const textOr = await buildFrenchTextSearchOr(this.prisma, {
+      term: query.q,
+      scalarFields: ['ref', 'name'],
+    });
     const where = {
       ...(query.status ? { status: query.status as any } : {}),
-      ...(query.q
-        ? {
-            OR: [
-              { ref: { contains: query.q } },
-              { name: { contains: query.q } },
-            ],
-          }
-        : {}),
+      ...(textOr ? { OR: textOr } : {}),
     };
 
     return this.prisma.$transaction(async (tx) => {

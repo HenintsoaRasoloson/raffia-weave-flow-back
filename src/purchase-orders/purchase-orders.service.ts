@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { RecordPurchaseOrderPaymentDto } from './dto/record-purchase-order-payment.dto';
@@ -13,19 +14,17 @@ const PURCHASE_ORDER_PREFIX = 'ACH';
 export class PurchaseOrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const textOr = await buildFrenchTextSearchOr(this.prisma, {
+      term: query.q,
+      scalarFields: ['orderNumber'],
+      relations: [{ table: 'Supplier', columns: ['name'], foreignKey: 'supplierId' }],
+    });
     const where = {
       ...(query.status ? { status: query.status as any } : {}),
-      ...(query.q
-        ? {
-            OR: [
-              { orderNumber: { contains: query.q } },
-              { supplier: { is: { name: { contains: query.q } } } },
-            ],
-          }
-        : {}),
+      ...(textOr ? { OR: textOr } : {}),
     };
 
     return this.prisma.$transaction(async (tx) => {

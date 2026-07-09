@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTableTextWhere } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
@@ -8,19 +9,17 @@ import { UpdateSupplierDto } from './dto/update-supplier.dto';
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const textWhere = await buildFrenchTableTextWhere(
+      this.prisma,
+      'Supplier',
+      ['name', 'email', 'category'],
+      query.q,
+    );
     const where = {
-      ...(query.q
-        ? {
-            OR: [
-              { name: { contains: query.q } },
-              { email: { contains: query.q } },
-              { category: { contains: query.q } },
-            ],
-          }
-        : {}),
+      ...textWhere,
     };
 
     return this.prisma.$transaction(async (tx) => {

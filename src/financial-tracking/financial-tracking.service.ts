@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { buildFrenchTableTextWhere } from '../common/query/search.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BudgetAlertQueryDto } from './dto/budget-alert-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -646,6 +647,12 @@ export class FinancialTrackingService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const dateFilter = this.buildDateFilter(query.dateFrom, query.dateTo);
+    const textWhere = await buildFrenchTableTextWhere(
+      this.prisma,
+      'LedgerEntry',
+      ['label', 'notes'],
+      query.q,
+    );
 
     const where = {
       ...(query.type ? { entryType: query.type } : {}),
@@ -653,14 +660,7 @@ export class FinancialTrackingService {
       ...(query.supplierId ? { supplierId: query.supplierId } : {}),
       ...(query.ledgerCategoryId ? { ledgerCategoryId: query.ledgerCategoryId } : {}),
       ...(dateFilter ? { entryDate: dateFilter } : {}),
-      ...(query.q
-        ? {
-            OR: [
-              { label: { contains: query.q } },
-              { notes: { contains: query.q } },
-            ],
-          }
-        : {}),
+      ...textWhere,
     };
 
     const [items, total] = await this.prisma.$transaction([

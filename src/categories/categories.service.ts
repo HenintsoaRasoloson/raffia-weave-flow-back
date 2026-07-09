@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTableTextWhere } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -8,18 +9,18 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const where = query.q
-      ? {
-          OR: [
-            { name: { contains: query.q } },
-            { slug: { contains: query.q } },
-            { code: { contains: query.q } },
-          ],
-        }
-      : {};
+    const textWhere = await buildFrenchTableTextWhere(
+      this.prisma,
+      'Category',
+      ['name', 'slug', 'code'],
+      query.q,
+    );
+    const where = {
+      ...textWhere,
+    };
 
     return this.prisma.$transaction(async (tx) => {
       const [items, total] = await Promise.all([

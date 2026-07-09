@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBomItemDto } from './dto/create-bom-item.dto';
 import { UpdateBomItemDto } from './dto/update-bom-item.dto';
@@ -8,18 +9,18 @@ import { UpdateBomItemDto } from './dto/update-bom-item.dto';
 export class BomItemsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const textOr = await buildFrenchTextSearchOr(this.prisma, {
+      term: query.q,
+      relations: [
+        { table: 'Product', columns: ['name'], foreignKey: 'productId' },
+        { table: 'Component', columns: ['name'], foreignKey: 'componentId' },
+      ],
+    });
     const where = {
-      ...(query.q
-        ? {
-            OR: [
-              { product: { name: { contains: query.q } } },
-              { component: { name: { contains: query.q } } },
-            ],
-          }
-        : {}),
+      ...(textOr ? { OR: textOr } : {}),
     };
 
     return this.prisma.$transaction(async (tx) => {

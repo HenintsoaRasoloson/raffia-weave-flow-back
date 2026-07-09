@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { normalizeEnumParam, trimQueryValue } from '../../common/query/search.util';
 import {
   IsDateString,
   IsIn,
@@ -30,11 +31,13 @@ export class ListLedgerEntriesQueryDto {
 
   @ApiPropertyOptional({ description: 'Recherche texte sur libelle/note' })
   @IsOptional()
+  @Transform(({ value }) => trimQueryValue(value))
   @IsString()
   q?: string;
 
   @ApiPropertyOptional({ enum: LEDGER_ENTRY_TYPES })
   @IsOptional()
+  @Transform(({ value }) => normalizeEnumParam(value))
   @IsIn([...LEDGER_ENTRY_TYPES])
   type?: (typeof LEDGER_ENTRY_TYPES)[number];
 

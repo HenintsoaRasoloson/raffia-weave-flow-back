@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTableTextWhere } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateColorDto } from './dto/create-color.dto';
 import { UpdateColorDto } from './dto/update-color.dto';
@@ -8,17 +9,18 @@ import { UpdateColorDto } from './dto/update-color.dto';
 export class ColorsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const where = query.q
-      ? {
-          OR: [
-            { name: { contains: query.q, mode: 'insensitive' as const } },
-            { hex: { contains: query.q, mode: 'insensitive' as const } },
-          ],
-        }
-      : {};
+    const textWhere = await buildFrenchTableTextWhere(
+      this.prisma,
+      'Color',
+      ['name', 'hex'],
+      query.q,
+    );
+    const where = {
+      ...textWhere,
+    };
 
     return this.prisma.$transaction(async (tx) => {
       const [items, total] = await Promise.all([

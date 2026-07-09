@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCatalogShareDto } from './dto/create-catalog-share.dto';
 import { ReplaceCatalogShareProductsDto } from './dto/replace-catalog-share-products.dto';
@@ -37,19 +38,16 @@ export type CatalogShareWithPublicProducts = Prisma.CatalogShareGetPayload<{
 export class CatalogSharesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const textOr = await buildFrenchTextSearchOr(this.prisma, {
+      term: query.q,
+      scalarFields: ['title', 'token'],
+      relations: [{ table: 'Client', columns: ['name'], foreignKey: 'clientId' }],
+    });
     const where = {
-      ...(query.q
-        ? {
-            OR: [
-              { title: { contains: query.q } },
-              { token: { contains: query.q } },
-              { client: { name: { contains: query.q } } },
-            ],
-          }
-        : {}),
+      ...(textOr ? { OR: textOr } : {}),
     };
 
     return this.prisma.$transaction(async (tx) => {

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
@@ -16,21 +17,17 @@ export class DeliveriesService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  findAll(query: ListQueryDto) {
+  async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const textOr = await buildFrenchTextSearchOr(this.prisma, {
+      term: query.q,
+      scalarFields: ['deliveryNumber', 'carrier', 'trackingCode'],
+      relations: [{ table: 'Client', columns: ['name'], foreignKey: 'clientId' }],
+    });
     const where = {
       ...(query.status ? { status: query.status as any } : {}),
-      ...(query.q
-        ? {
-            OR: [
-              { deliveryNumber: { contains: query.q } },
-              { carrier: { contains: query.q } },
-              { trackingCode: { contains: query.q } },
-              { client: { is: { name: { contains: query.q } } } },
-            ],
-          }
-        : {}),
+      ...(textOr ? { OR: textOr } : {}),
     };
 
     return this.prisma.$transaction(async (tx) => {

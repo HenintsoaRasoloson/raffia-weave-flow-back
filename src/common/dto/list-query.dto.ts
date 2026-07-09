@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { normalizeEnumParam, trimQueryValue } from '../query/search.util';
 import {
   IsBoolean,
   IsIn,
@@ -28,16 +29,19 @@ export class ListQueryDto {
 
   @ApiPropertyOptional({ description: 'Recherche textuelle' })
   @IsOptional()
+  @Transform(({ value }) => trimQueryValue(value))
   @IsString()
   q?: string;
 
   @ApiPropertyOptional({ description: 'Filtre de statut' })
   @IsOptional()
+  @Transform(({ value }) => normalizeEnumParam(value))
   @IsString()
   status?: string;
 
   @ApiPropertyOptional({ description: 'Filtre de type' })
   @IsOptional()
+  @Transform(({ value }) => normalizeEnumParam(value))
   @IsString()
   type?: string;
 
