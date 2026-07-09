@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
@@ -11,6 +12,7 @@ export class InvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   findAll(query: ListQueryDto) {
@@ -274,6 +276,54 @@ export class InvoicesService {
           },
           details: `${dto.amount} ${invoice.currency ?? 'EUR'} par ${dto.paymentMethod}`,
         });
+      }
+
+      // Notifier selon le montant du paiement
+      if (dto.amount > 5000) {
+        await this.notificationsService.notifyRole('GERANT', {
+          type: 'large_payment_received',
+          title: '💰 Paiement important reçu',
+          message: `${dto.amount.toFixed(2)} EUR - Facture ${updated.invoiceNumber}`,
+          data: {
+            invoiceId: id,
+            amount: dto.amount,
+            clientName: updated.client?.name,
+            paymentMethod: dto.paymentMethod,
+          },
+          actionUrl: `/invoices/${id}`,
+          priority: 'high',
+        });
+      }
+
+      // Toujours notifier le responsable financier
+      await this.notificationsService.notifyRole(
+        'RESPONSABLE_FINANCIER_STOCKS',
+        {
+          type: 'payment_recorded',
+          title: '📝 Paiement enregistré',
+          message: `${dto.amount.toFixed(2)} EUR - ${updated.invoiceNumber}`,
+          data: {
+            invoiceId: id,
+            amount: dto.amount,
+            status: updated.status,
+          },
+          actionUrl: `/invoices/${id}`,
+        },
+      );
+
+      // Notifier si facture entièrement payée
+      if (isFullyPaid) {
+        await this.notificationsService.notifyRoles(
+          ['GERANT', 'RESPONSABLE_GENERAL'],
+          {
+            type: 'invoice_fully_paid',
+            title: '✅ Facture intégralement payée',
+            message: `${updated.invoiceNumber} (${newPaidAmount.toFixed(2)} EUR)`,
+            data: { invoiceId: id, totalAmount: newPaidAmount },
+            actionUrl: `/invoices/${id}`,
+          },
+        )
+          .catch((err) => console.error('Notification error:', err));
       }
 
       return updated;

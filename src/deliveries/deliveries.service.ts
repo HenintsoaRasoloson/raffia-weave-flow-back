@@ -1,12 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 
 @Injectable()
 export class DeliveriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
@@ -74,7 +78,7 @@ export class DeliveriesService {
   async markDelivered(id: string) {
     const delivery = await this.prisma.delivery.findUnique({
       where: { id },
-      select: { status: true },
+      include: { productionOrder: { include: { salesOrder: { include: { client: true } } } } },
     });
     if (!delivery) {
       throw new NotFoundException('Livraison introuvable');
@@ -88,13 +92,35 @@ export class DeliveriesService {
       );
     }
 
-    return this.prisma.delivery.update({
+    const updated = await this.prisma.delivery.update({
       where: { id },
       data: {
         status: 'DELIVERED',
         deliveredAt: new Date(),
       } as any,
+      include: { productionOrder: { include: { salesOrder: { include: { client: true } } } } },
     });
+
+    // Notifier tous les rôles concernés
+    await this.notificationsService.notifyRoles(
+      ['GERANT', 'RESPONSABLE_GENERAL', 'RESPONSABLE_LIVRAISON'],
+      {
+        type: 'delivery_completed',
+        title: '🚚 Livraison effectuée',
+        message: `Client: ${updated.productionOrder?.salesOrder?.client?.name ?? 'Inconnu'} - ${updated.deliveryNumber}`,
+        data: {
+          deliveryId: id,
+          deliveryNumber: updated.deliveryNumber,
+          clientId: updated.productionOrder?.salesOrder?.clientId,
+          clientName: updated.productionOrder?.salesOrder?.client?.name,
+        },
+        actionUrl: `/deliveries/${id}`,
+        priority: 'normal',
+      },
+    )
+      .catch((err) => console.error('Notification error:', err));
+
+    return updated;
   }
 
   remove(id: string) {

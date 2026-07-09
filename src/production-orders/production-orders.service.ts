@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
 import { UpdateProductionProgressDto } from './dto/update-production-progress.dto';
 import { UpdateProductionOrderDto } from './dto/update-production-order.dto';
@@ -11,6 +12,7 @@ export class ProductionOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   findAll(query: ListQueryDto) {
@@ -222,6 +224,29 @@ export class ProductionOrdersService {
         changes: { qualityApproved: { before: false, after: true } },
       });
     }
+
+    // Notifier que le produit est prêt pour livraison
+    await this.notificationsService.notifyRole('RESPONSABLE_LIVRAISON', {
+      type: 'production_ready_for_delivery',
+      title: '✅ Produit prêt pour livraison',
+      message: `OF #${updated.orderNumber} - Validation qualité effectuée`,
+      data: {
+        productionOrderId: id,
+        orderNumber: updated.orderNumber,
+      },
+      actionUrl: `/production-orders/${id}`,
+      priority: 'normal',
+    });
+
+    // Notifier aussi le gérant
+    await this.notificationsService.notifyRole('GERANT', {
+      type: 'production_completed',
+      title: '🎉 Production terminée et validée',
+      message: `OF #${updated.orderNumber}`,
+      data: { productionOrderId: id },
+      actionUrl: `/production-orders/${id}`,
+    })
+      .catch((err) => console.error('Notification error:', err));
 
     return updated;
   }
