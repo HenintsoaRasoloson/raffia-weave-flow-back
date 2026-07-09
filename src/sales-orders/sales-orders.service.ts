@@ -145,7 +145,7 @@ export class SalesOrdersService {
   ) {
     const order = await this.prisma.salesOrder.findUnique({
       where: { id: salesOrderId },
-      select: { id: true, batRequired: true },
+      select: { id: true, batRequired: true, referenceLevel: true },
     });
     if (!order) {
       throw new NotFoundException('Commande introuvable');
@@ -195,6 +195,7 @@ export class SalesOrdersService {
     return this.prisma.batDocument.create({
       data: {
         salesOrderId,
+        referenceLevel: order.referenceLevel,
         kind: dto.kind as any,
         originalName: file.originalname,
         mimeType: file.mimetype,
@@ -279,6 +280,7 @@ export class SalesOrdersService {
             create: items.map((item) => {
               const lineTotalHt = item.quantity * item.unitPriceHt;
               return {
+                referenceLevel,
                 description: item.description,
                 quantity: item.quantity,
                 unitPriceHt: item.unitPriceHt,
@@ -330,19 +332,35 @@ export class SalesOrdersService {
   }
 
   update(id: string, dto: UpdateSalesOrderDto) {
-    const payload: Record<string, unknown> = { ...dto };
-    if (dto.orderNumber !== undefined) {
-      const parsed = this.parseSalesOrderNumber(dto.orderNumber);
-      payload.orderNumber = parsed.number;
-      payload.referenceLevel = parsed.level;
-    }
-    if (dto.orderDate) {
-      payload.orderDate = new Date(dto.orderDate);
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const payload: Record<string, unknown> = { ...dto };
+      if (dto.orderNumber !== undefined) {
+        const parsed = this.parseSalesOrderNumber(dto.orderNumber);
+        payload.orderNumber = parsed.number;
+        payload.referenceLevel = parsed.level;
+      }
+      if (dto.orderDate) {
+        payload.orderDate = new Date(dto.orderDate);
+      }
 
-    return this.prisma.salesOrder.update({
-      where: { id },
-      data: payload as any,
+      const updated = await tx.salesOrder.update({
+        where: { id },
+        data: payload as any,
+      });
+
+      if (payload.referenceLevel !== undefined) {
+        const referenceLevel = payload.referenceLevel as number;
+        await tx.salesOrderItem.updateMany({
+          where: { salesOrderId: id },
+          data: { referenceLevel },
+        });
+        await tx.batDocument.updateMany({
+          where: { salesOrderId: id },
+          data: { referenceLevel },
+        });
+      }
+
+      return updated;
     });
   }
 

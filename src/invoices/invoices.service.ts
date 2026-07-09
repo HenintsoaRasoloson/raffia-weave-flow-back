@@ -142,7 +142,13 @@ export class InvoicesService {
     userId?: string,
     options?: { version?: number },
   ) {
-    await this.ensureInvoiceExists(invoiceId);
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { id: true, referenceLevel: true },
+    });
+    if (!invoice) {
+      throw new NotFoundException('Facture introuvable');
+    }
     if (!file) {
       throw new BadRequestException('Aucun fichier reçu. Champ attendu: file');
     }
@@ -185,6 +191,7 @@ export class InvoicesService {
     return this.prisma.invoiceDocument.create({
       data: {
         invoiceId,
+        referenceLevel: invoice.referenceLevel,
         kind: dto.kind as any,
         originalName: file.originalname,
         storedName,
@@ -349,6 +356,7 @@ export class InvoicesService {
             create: items.map((item) => {
               const lineTotalHt = item.quantity * item.unitPriceHt;
               return {
+                referenceLevel,
                 description: item.description,
                 quantity: item.quantity,
                 unitPriceHt: item.unitPriceHt,
@@ -455,12 +463,31 @@ export class InvoicesService {
           current.referenceLevel,
           targetType,
         );
+        payload.referenceLevel = current.referenceLevel;
       }
 
-      return tx.invoice.update({
+      const updated = await tx.invoice.update({
         where: { id },
         data: payload as any,
       });
+
+      if (payload.referenceLevel !== undefined) {
+        const referenceLevel = payload.referenceLevel as number;
+        await tx.invoiceItem.updateMany({
+          where: { invoiceId: id },
+          data: { referenceLevel },
+        });
+        await tx.invoicePayment.updateMany({
+          where: { invoiceId: id },
+          data: { referenceLevel },
+        });
+        await tx.invoiceDocument.updateMany({
+          where: { invoiceId: id },
+          data: { referenceLevel },
+        });
+      }
+
+      return updated;
     });
   }
 
@@ -547,7 +574,14 @@ export class InvoicesService {
   async recordPayment(id: string, dto: RecordPaymentDto, userId?: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      select: { status: true, type: true, totalTtc: true, paidAmount: true, currency: true },
+      select: {
+        status: true,
+        type: true,
+        totalTtc: true,
+        paidAmount: true,
+        currency: true,
+        referenceLevel: true,
+      },
     });
     if (!invoice) {
       throw new NotFoundException('Facture introuvable');
@@ -578,6 +612,7 @@ export class InvoicesService {
       await tx.invoicePayment.create({
         data: {
           invoiceId: id,
+          referenceLevel: invoice.referenceLevel,
           amount: dto.amount,
           paymentMethod: dto.paymentMethod as any,
           paidAt,

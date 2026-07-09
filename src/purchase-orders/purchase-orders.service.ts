@@ -82,6 +82,7 @@ export class PurchaseOrdersService {
           notes: dto.notes,
           items: {
             create: dto.items.map((item) => ({
+              referenceLevel,
               componentId: item.componentId,
               description: item.description,
               quantity: item.quantity,
@@ -105,10 +106,21 @@ export class PurchaseOrdersService {
     if (dto.expectedAt) payload.expectedAt = new Date(dto.expectedAt);
     if (dto.receivedAt) payload.receivedAt = new Date(dto.receivedAt);
 
-    return this.prisma.purchaseOrder.update({
-      where: { id },
-      data: payload as any,
-      include: { supplier: true, items: true },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.purchaseOrder.update({
+        where: { id },
+        data: payload as any,
+        include: { supplier: true, items: true },
+      });
+
+      if (payload.referenceLevel !== undefined) {
+        await tx.purchaseOrderItem.updateMany({
+          where: { purchaseOrderId: id },
+          data: { referenceLevel: payload.referenceLevel as number },
+        });
+      }
+
+      return updated;
     });
   }
 
