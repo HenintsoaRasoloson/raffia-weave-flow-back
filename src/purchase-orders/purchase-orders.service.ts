@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
+import { RecordPurchaseOrderPaymentDto } from './dto/record-purchase-order-payment.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
 
 const BUSINESS_DOC_SCOPE = 'business-documents';
@@ -31,7 +32,7 @@ export class PurchaseOrdersService {
       const [items, total] = await Promise.all([
         tx.purchaseOrder.findMany({
           where,
-          include: { supplier: true, items: true },
+          include: { supplier: true, items: true, payments: true },
           orderBy: { orderDate: 'desc' },
           skip: (page - 1) * pageSize,
           take: pageSize,
@@ -46,7 +47,7 @@ export class PurchaseOrdersService {
   findOne(id: string) {
     return this.prisma.purchaseOrder.findUnique({
       where: { id },
-      include: { supplier: true, items: true },
+      include: { supplier: true, items: true, payments: true },
     });
   }
 
@@ -77,6 +78,7 @@ export class PurchaseOrdersService {
           status: (dto.status ?? 'DRAFT') as any,
           orderDate: new Date(dto.orderDate),
           expectedAt: dto.expectedAt ? new Date(dto.expectedAt) : null,
+          paidAmount: 0,
           totalHt,
           currency: dto.currency ?? 'EUR',
           notes: dto.notes,
@@ -91,7 +93,7 @@ export class PurchaseOrdersService {
             })),
           },
         } as any,
-        include: { supplier: true, items: true },
+        include: { supplier: true, items: true, payments: true },
       });
     });
   }
@@ -110,7 +112,7 @@ export class PurchaseOrdersService {
       const updated = await tx.purchaseOrder.update({
         where: { id },
         data: payload as any,
-        include: { supplier: true, items: true },
+        include: { supplier: true, items: true, payments: true },
       });
 
       if (payload.referenceLevel !== undefined) {
@@ -149,7 +151,7 @@ export class PurchaseOrdersService {
         status: 'RECEIVED',
         receivedAt: new Date(),
       } as any,
-      include: { supplier: true, items: true },
+      include: { supplier: true, items: true, payments: true },
     });
 
     // Mettre à jour le stock des composants reçus
@@ -165,6 +167,97 @@ export class PurchaseOrdersService {
     }
 
     return updated;
+  }
+
+  async recordPayment(id: string, dto: RecordPurchaseOrderPaymentDto) {
+    const purchaseOrder = await this.prisma.purchaseOrder.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        totalHt: true,
+        paidAmount: true,
+        currency: true,
+        supplierId: true,
+      },
+    });
+
+    if (!purchaseOrder) {
+      throw new NotFoundException('Bon de commande introuvable');
+    }
+
+    if ((purchaseOrder.status as unknown as string) === 'CANCELLED') {
+      throw new BadRequestException(
+        'Impossible d enregistrer un paiement sur un bon de commande annule',
+      );
+    }
+
+    const alreadyPaid = Number(purchaseOrder.paidAmount ?? 0);
+    const total = Number(purchaseOrder.totalHt);
+    const newPaidAmount = alreadyPaid + dto.amount;
+
+    if (newPaidAmount > total) {
+      throw new BadRequestException(
+        `Le montant decaisse (${newPaidAmount}) depasse le total achat (${total})`,
+      );
+    }
+
+    const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const category = await tx.ledgerCategory.upsert({
+        where: { code: 'SUPPLIER_PAYMENT' },
+        update: {
+          name: 'Paiement fournisseur',
+          entryType: 'EXPENSE',
+          description: 'Decaissements reels lies aux achats fournisseurs',
+          active: true,
+          isSystem: true,
+        },
+        create: {
+          code: 'SUPPLIER_PAYMENT',
+          name: 'Paiement fournisseur',
+          entryType: 'EXPENSE',
+          description: 'Decaissements reels lies aux achats fournisseurs',
+          active: true,
+          isSystem: true,
+        },
+      });
+
+      await tx.purchaseOrderPayment.create({
+        data: {
+          purchaseOrderId: id,
+          amount: dto.amount,
+          paymentMethod: dto.paymentMethod as any,
+          paidAt,
+          notes: dto.notes,
+        },
+      });
+
+      await tx.ledgerEntry.create({
+        data: {
+          entryDate: paidAt,
+          label: `Paiement fournisseur ${purchaseOrder.orderNumber}`,
+          entryType: 'EXPENSE',
+          amount: dto.amount,
+          currency: purchaseOrder.currency ?? 'EUR',
+          supplierId: purchaseOrder.supplierId,
+          purchaseOrderId: purchaseOrder.id,
+          ledgerCategoryId: category.id,
+          notes: dto.notes,
+        },
+      });
+
+      return tx.purchaseOrder.update({
+        where: { id },
+        data: {
+          paidAmount: newPaidAmount,
+          paidAt: newPaidAmount >= total ? paidAt : null,
+        } as any,
+        include: { supplier: true, items: true, payments: true },
+      });
+    });
   }
 
   remove(id: string) {

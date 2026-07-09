@@ -187,6 +187,11 @@ enum LedgerEntryType {
   TRANSFER
 }
 
+enum BudgetDirection {
+  INCOME
+  EXPENSE
+}
+
 enum UserRole {
   GERANT
   RESPONSABLE_GENERAL
@@ -428,6 +433,7 @@ model Client {
   shares        CatalogShare[]
   fiscalCards   ClientFiscalCard[]
   ledgerEntries LedgerEntry[]
+  budgets       FinancialBudget[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
@@ -469,6 +475,7 @@ model Supplier {
   components     Component[]
   purchaseOrders PurchaseOrder[]
   ledgerEntries  LedgerEntry[]
+  budgets        FinancialBudget[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -659,7 +666,10 @@ model PurchaseOrder {
   orderDate     DateTime
   expectedAt    DateTime?
   receivedAt    DateTime?
+  paidAt        DateTime?
+  paidAmount    Decimal?             @db.Decimal(12, 2)
   items         PurchaseOrderItem[]
+  payments      PurchaseOrderPayment[]
   ledgerEntries LedgerEntry[]
   calendarEvents CalendarEvent[]
   totalHt       Decimal             @db.Decimal(12, 2)
@@ -821,6 +831,59 @@ model InvoicePayment {
   @@index([referenceLevel])
 }
 
+model PurchaseOrderPayment {
+  id              String         @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id])
+  amount          Decimal        @db.Decimal(12, 2)
+  paymentMethod   PaymentMethod
+  paidAt          DateTime       @default(now())
+  notes           String?
+  createdAt       DateTime       @default(now())
+
+  @@index([purchaseOrderId, paidAt])
+}
+
+model LedgerCategory {
+  id               String            @id @default(cuid())
+  code             String            @unique
+  name             String
+  entryType        LedgerEntryType
+  description      String?
+  isSystem         Boolean           @default(false)
+  active           Boolean           @default(true)
+  ledgerEntries    LedgerEntry[]
+  budgets          FinancialBudget[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([entryType, active])
+}
+
+model FinancialBudget {
+  id               String            @id @default(cuid())
+  label            String
+  direction        BudgetDirection
+  amount           Decimal           @db.Decimal(12, 2)
+  currency         String            @default("EUR")
+  periodStart      DateTime
+  periodEnd        DateTime
+  ledgerCategoryId String?
+  ledgerCategory   LedgerCategory?   @relation(fields: [ledgerCategoryId], references: [id])
+  clientId         String?
+  client           Client?           @relation(fields: [clientId], references: [id])
+  supplierId       String?
+  supplier         Supplier?         @relation(fields: [supplierId], references: [id])
+  notes            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([periodStart, periodEnd])
+  @@index([ledgerCategoryId, periodStart, periodEnd])
+  @@index([clientId, periodStart, periodEnd])
+  @@index([supplierId, periodStart, periodEnd])
+}
+
 model CatalogShare {
   id           String              @id @default(cuid())
   token        String              @unique
@@ -870,6 +933,8 @@ model LedgerEntry {
   entryType       LedgerEntryType
   amount          Decimal         @db.Decimal(12, 2)
   currency        String          @default("EUR")
+  ledgerCategoryId String?
+  ledgerCategory  LedgerCategory? @relation(fields: [ledgerCategoryId], references: [id])
   clientId        String?
   client          Client?         @relation(fields: [clientId], references: [id])
   supplierId      String?
@@ -883,4 +948,6 @@ model LedgerEntry {
   notes           String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
+
+  @@index([ledgerCategoryId, entryDate])
 }

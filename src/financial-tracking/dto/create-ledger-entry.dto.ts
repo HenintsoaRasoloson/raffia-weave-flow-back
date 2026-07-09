@@ -78,6 +78,11 @@ export class CreateLedgerEntryDto {
   @IsString()
   purchaseOrderId?: string;
 
+  @ApiPropertyOptional({ description: 'Categorie structurante de suivi financier' })
+  @IsOptional()
+  @IsString()
+  ledgerCategoryId?: string;
+
   @ApiPropertyOptional({
     description: 'Note libre: reference virement, categorie interne, commentaire',
   })

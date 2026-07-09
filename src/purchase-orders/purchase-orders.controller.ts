@@ -6,6 +6,7 @@ import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { PurchaseOrderResponseDto } from './dto/purchase-order-response.dto';
+import { RecordPurchaseOrderPaymentDto } from './dto/record-purchase-order-payment.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
 import { PurchaseOrdersService } from './purchase-orders.service';
 
@@ -52,6 +53,21 @@ export class PurchaseOrdersController {
   @ApiOkResponse({ type: PurchaseOrderResponseDto })
   markReceived(@Param('id') id: string) {
     return this.purchaseOrdersService.markReceived(id);
+  }
+
+  @Post(':id/record-payment')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Enregistrer un paiement fournisseur',
+    description:
+      'Cree un decaissement reel rattache au bon de commande et alimente automatiquement la tresorerie.',
+  })
+  @ApiOkResponse({ type: PurchaseOrderResponseDto })
+  recordPayment(
+    @Param('id') id: string,
+    @Body() dto: RecordPurchaseOrderPaymentDto,
+  ) {
+    return this.purchaseOrdersService.recordPayment(id, dto);
   }
 
   @Delete(':id')

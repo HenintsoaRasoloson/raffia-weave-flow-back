@@ -624,6 +624,25 @@ export class InvoicesService {
         },
       });
 
+      const category = await tx.ledgerCategory.upsert({
+        where: { code: 'CLIENT_COLLECTION' },
+        update: {
+          name: 'Encaissement client',
+          entryType: 'INCOME',
+          description: 'Encaissements reels des factures clients',
+          active: true,
+          isSystem: true,
+        },
+        create: {
+          code: 'CLIENT_COLLECTION',
+          name: 'Encaissement client',
+          entryType: 'INCOME',
+          description: 'Encaissements reels des factures clients',
+          active: true,
+          isSystem: true,
+        },
+      });
+
       await tx.ledgerEntry.create({
         data: {
           entryDate: paidAt,
@@ -631,6 +650,7 @@ export class InvoicesService {
           entryType: 'INCOME',
           amount: dto.amount,
           currency: invoice.currency ?? 'EUR',
+          ledgerCategoryId: category.id,
           clientId: invoice.clientId,
           salesOrderId: invoice.salesOrderId,
           invoiceId: invoice.id,

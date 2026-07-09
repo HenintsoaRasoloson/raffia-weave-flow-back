@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class PurchaseOrderResponseDto {
   @ApiProperty()
@@ -15,6 +16,12 @@ export class PurchaseOrderResponseDto {
 
   @ApiProperty()
   totalHt!: number;
+
+  @ApiPropertyOptional()
+  paidAmount?: number;
+
+  @ApiPropertyOptional()
+  paidAt?: Date | null;
 
   @ApiProperty()
   orderDate!: Date;

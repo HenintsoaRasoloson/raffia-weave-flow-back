@@ -1,7 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateFinancialBudgetDto } from './dto/create-financial-budget.dto';
+import { CreateLedgerCategoryDto } from './dto/create-ledger-category.dto';
 import { CreateLedgerEntryDto } from './dto/create-ledger-entry.dto';
 import { FinancialOverviewQueryDto } from './dto/financial-overview-query.dto';
+import { ListFinancialBudgetsQueryDto } from './dto/list-financial-budgets-query.dto';
 import { ListLedgerEntriesQueryDto } from './dto/list-ledger-entries-query.dto';
 
 type InvoiceCostInput = {
@@ -11,11 +14,184 @@ type InvoiceCostInput = {
   revenueHt: number;
 };
 
+const DEFAULT_LEDGER_CATEGORIES = [
+  {
+    code: 'CLIENT_COLLECTION',
+    name: 'Encaissement client',
+    entryType: 'INCOME',
+    description: 'Encaissements reels des factures clients',
+  },
+  {
+    code: 'SUPPLIER_PAYMENT',
+    name: 'Paiement fournisseur',
+    entryType: 'EXPENSE',
+    description: 'Decaissements reels lies aux achats fournisseurs',
+  },
+  {
+    code: 'PAYROLL',
+    name: 'Salaires',
+    entryType: 'EXPENSE',
+    description: 'Salaires, primes et charges de personnel',
+  },
+  {
+    code: 'LOGISTICS',
+    name: 'Logistique',
+    entryType: 'EXPENSE',
+    description: 'Transport, livraison, emballage et manutention',
+  },
+  {
+    code: 'TAX',
+    name: 'Fiscalite',
+    entryType: 'EXPENSE',
+    description: 'TVA, impots et echeances fiscales',
+  },
+  {
+    code: 'OPERATING_EXPENSE',
+    name: 'Charges operationnelles',
+    entryType: 'EXPENSE',
+    description: 'Charges generales et depenses d exploitation',
+  },
+  {
+    code: 'INTERNAL_TRANSFER',
+    name: 'Virement interne',
+    entryType: 'TRANSFER',
+    description: 'Mouvements internes non retenus en resultat',
+  },
+] as const;
+
 @Injectable()
 export class FinancialTrackingService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async listLedgerCategories() {
+    await this.ensureDefaultCategories();
+
+    return this.prisma.ledgerCategory.findMany({
+      orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
+    });
+  }
+
+  createLedgerCategory(dto: CreateLedgerCategoryDto) {
+    return this.prisma.ledgerCategory.create({
+      data: {
+        code: dto.code.trim().toUpperCase(),
+        name: dto.name.trim(),
+        entryType: dto.entryType,
+        description: dto.description?.trim(),
+        active: dto.active ?? true,
+      },
+    });
+  }
+
+  async listBudgets(query: ListFinancialBudgetsQueryDto) {
+    await this.ensureDefaultCategories();
+
+    const overlapFilter = this.buildOverlapFilter(query.dateFrom, query.dateTo);
+    const where = {
+      ...(overlapFilter ?? {}),
+      ...(query.ledgerCategoryId ? { ledgerCategoryId: query.ledgerCategoryId } : {}),
+      ...(query.clientId ? { clientId: query.clientId } : {}),
+      ...(query.supplierId ? { supplierId: query.supplierId } : {}),
+    };
+
+    const budgets = await this.prisma.financialBudget.findMany({
+      where,
+      include: {
+        ledgerCategory: true,
+        client: { select: { id: true, name: true } },
+        supplier: { select: { id: true, name: true } },
+      },
+      orderBy: [{ periodStart: 'desc' }, { label: 'asc' }],
+    });
+
+    if (!budgets.length) {
+      return { items: [], totalBudgeted: 0, totalActual: 0, totalVariance: 0 };
+    }
+
+    const range = budgets.reduce(
+      (acc, budget) => ({
+        from: budget.periodStart < acc.from ? budget.periodStart : acc.from,
+        to: budget.periodEnd > acc.to ? budget.periodEnd : acc.to,
+      }),
+      { from: budgets[0].periodStart, to: budgets[0].periodEnd },
+    );
+
+    const entries = await this.prisma.ledgerEntry.findMany({
+      where: {
+        entryDate: { gte: range.from, lte: range.to },
+      },
+      select: {
+        entryDate: true,
+        entryType: true,
+        amount: true,
+        ledgerCategoryId: true,
+        clientId: true,
+        supplierId: true,
+      },
+    });
+
+    const items = budgets.map((budget) => {
+      const actualAmount = this.sum(
+        entries
+          .filter((entry) => this.matchesBudgetEntry(budget, entry))
+          .map((entry) => entry.amount),
+      );
+      const budgetAmount = this.toNumber(budget.amount);
+      const variance = actualAmount - budgetAmount;
+
+      return {
+        ...budget,
+        amount: this.round2(budget.amount),
+        actualAmount: this.round2(actualAmount),
+        variance: this.round2(variance),
+        varianceRate:
+          budgetAmount > 0 ? this.round2((variance / budgetAmount) * 100) : 0,
+      };
+    });
+
+    return {
+      items,
+      totalBudgeted: this.round2(items.reduce((sum, item) => sum + item.amount, 0)),
+      totalActual: this.round2(items.reduce((sum, item) => sum + item.actualAmount, 0)),
+      totalVariance: this.round2(items.reduce((sum, item) => sum + item.variance, 0)),
+    };
+  }
+
+  createBudget(dto: CreateFinancialBudgetDto) {
+    const periodStart = new Date(dto.periodStart);
+    const periodEnd = new Date(dto.periodEnd);
+
+    if (periodEnd < periodStart) {
+      throw new BadRequestException('periodEnd doit etre posterieur ou egal a periodStart');
+    }
+
+    return this.prisma.financialBudget.create({
+      data: {
+        label: dto.label.trim(),
+        direction: dto.direction,
+        amount: dto.amount,
+        currency: (dto.currency ?? 'EUR').toUpperCase(),
+        periodStart,
+        periodEnd,
+        ledgerCategoryId: dto.ledgerCategoryId,
+        clientId: dto.clientId,
+        supplierId: dto.supplierId,
+        notes: dto.notes,
+      },
+      include: {
+        ledgerCategory: true,
+        client: { select: { id: true, name: true } },
+        supplier: { select: { id: true, name: true } },
+      },
+    }).then((budget) => ({
+      ...budget,
+      amount: this.round2(budget.amount),
+    }));
+  }
+
   async getOverview(query: FinancialOverviewQueryDto) {
+    await this.ensureDefaultCategories();
+
     const period = this.resolvePeriod(query.dateFrom, query.dateTo);
     const horizonDays = query.horizonDays ?? 30;
     const now = new Date();
@@ -27,6 +203,7 @@ export class FinancialTrackingService {
     const [
       trackedEntries,
       periodEntries,
+      budgets,
       periodInvoices,
       periodPayments,
       overdueInvoices,
@@ -45,7 +222,22 @@ export class FinancialTrackingService {
           entryDate: { gte: period.from, lte: period.to },
           ...clientWhere,
         },
-        select: { entryType: true, amount: true },
+        select: {
+          entryType: true,
+          amount: true,
+          ledgerCategoryId: true,
+          ledgerCategory: { select: { id: true, code: true, name: true } },
+        },
+      }),
+      this.prisma.financialBudget.findMany({
+        where: {
+          periodStart: { lte: period.to },
+          periodEnd: { gte: period.from },
+          ...(query.clientId ? { clientId: query.clientId } : {}),
+        },
+        include: {
+          ledgerCategory: { select: { id: true, code: true, name: true } },
+        },
       }),
       this.prisma.invoice.findMany({
         where: {
@@ -127,6 +319,7 @@ export class FinancialTrackingService {
           orderNumber: true,
           expectedAt: true,
           totalHt: true,
+          paidAmount: true,
           supplier: { select: { name: true } },
         },
       }),
@@ -154,7 +347,10 @@ export class FinancialTrackingService {
       ),
     );
     const purchaseCommitments = this.sum(
-      upcomingPurchaseOrders.map((purchaseOrder) => purchaseOrder.totalHt),
+      upcomingPurchaseOrders.map(
+        (purchaseOrder) =>
+          this.toNumber(purchaseOrder.totalHt) - this.toNumber(purchaseOrder.paidAmount ?? 0),
+      ),
     );
     const operatingExpenses = periodOutflows;
     const { estimatedCost, estimatedRevenueHt } = await this.estimateInvoiceCosts(periodInvoices);
@@ -162,6 +358,53 @@ export class FinancialTrackingService {
     const estimatedMarginRate =
       estimatedRevenueHt > 0 ? (estimatedMarginAmount / estimatedRevenueHt) * 100 : 0;
     const projectedBalance = trackedBalance + upcomingReceivables - purchaseCommitments;
+    const budgetItems = budgets.map((budget) => {
+      const actualAmount = this.sum(
+        periodEntries
+          .filter((entry) => this.matchesBudgetEntry(budget, entry))
+          .map((entry) => entry.amount),
+      );
+      const budgetAmount = this.toNumber(budget.amount);
+      const variance = actualAmount - budgetAmount;
+
+      return {
+        id: budget.id,
+        label: budget.label,
+        direction: budget.direction,
+        budgetAmount: this.round2(budgetAmount),
+        actualAmount: this.round2(actualAmount),
+        variance: this.round2(variance),
+        varianceRate: budgetAmount > 0 ? this.round2((variance / budgetAmount) * 100) : 0,
+        ledgerCategory: budget.ledgerCategory,
+        periodStart: budget.periodStart,
+        periodEnd: budget.periodEnd,
+      };
+    });
+
+    const budgetSummary = {
+      totalBudgetedExpenses: this.round2(
+        budgetItems
+          .filter((item) => item.direction === 'EXPENSE')
+          .reduce((sum, item) => sum + item.budgetAmount, 0),
+      ),
+      totalActualExpenses: this.round2(
+        budgetItems
+          .filter((item) => item.direction === 'EXPENSE')
+          .reduce((sum, item) => sum + item.actualAmount, 0),
+      ),
+      totalBudgetedIncome: this.round2(
+        budgetItems
+          .filter((item) => item.direction === 'INCOME')
+          .reduce((sum, item) => sum + item.budgetAmount, 0),
+      ),
+      totalActualIncome: this.round2(
+        budgetItems
+          .filter((item) => item.direction === 'INCOME')
+          .reduce((sum, item) => sum + item.actualAmount, 0),
+      ),
+    };
+
+    const categoryBreakdown = this.buildCategoryBreakdown(periodEntries);
 
     const alerts = [
       ...(overdueAmount > 0
@@ -188,6 +431,15 @@ export class FinancialTrackingService {
               code: 'UPCOMING_COLLECTIONS',
               severity: 'medium',
               message: `${upcomingInvoices.length} encaissement(s) attendu(s) sous ${horizonDays} jours`,
+            },
+          ]
+        : []),
+      ...(budgetItems.some((item) => item.direction === 'EXPENSE' && item.variance > 0)
+        ? [
+            {
+              code: 'BUDGET_OVERRUN',
+              severity: 'medium',
+              message: 'Au moins un budget de depense depasse le reel previsionnel',
             },
           ]
         : []),
@@ -221,11 +473,16 @@ export class FinancialTrackingService {
         purchaseCommitments: this.round2(purchaseCommitments),
         estimatedProductionCost: this.round2(estimatedCost),
       },
+      budgets: {
+        ...budgetSummary,
+        items: budgetItems,
+      },
       margins: {
         estimatedRevenueHt: this.round2(estimatedRevenueHt),
         estimatedMarginAmount: this.round2(estimatedMarginAmount),
         estimatedMarginRate: this.round2(estimatedMarginRate),
       },
+      categoryBreakdown,
       overdueInvoices: overdueInvoices.map((invoice) => ({
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
@@ -241,7 +498,9 @@ export class FinancialTrackingService {
         orderNumber: purchaseOrder.orderNumber,
         supplierName: purchaseOrder.supplier?.name ?? null,
         expectedAt: purchaseOrder.expectedAt,
-        amount: this.round2(purchaseOrder.totalHt),
+        amount: this.round2(
+          this.toNumber(purchaseOrder.totalHt) - this.toNumber(purchaseOrder.paidAmount ?? 0),
+        ),
       })),
       alerts,
     };
@@ -256,6 +515,7 @@ export class FinancialTrackingService {
       ...(query.type ? { entryType: query.type } : {}),
       ...(query.clientId ? { clientId: query.clientId } : {}),
       ...(query.supplierId ? { supplierId: query.supplierId } : {}),
+      ...(query.ledgerCategoryId ? { ledgerCategoryId: query.ledgerCategoryId } : {}),
       ...(dateFilter ? { entryDate: dateFilter } : {}),
       ...(query.q
         ? {
@@ -271,6 +531,7 @@ export class FinancialTrackingService {
       this.prisma.ledgerEntry.findMany({
         where,
         include: {
+          ledgerCategory: true,
           client: { select: { id: true, name: true } },
           supplier: { select: { id: true, name: true } },
           invoice: { select: { id: true, invoiceNumber: true } },
@@ -303,6 +564,7 @@ export class FinancialTrackingService {
         entryType: dto.entryType,
         amount: dto.amount,
         currency: (dto.currency ?? 'EUR').toUpperCase(),
+        ledgerCategoryId: dto.ledgerCategoryId,
         clientId: dto.clientId,
         supplierId: dto.supplierId,
         salesOrderId: dto.salesOrderId,
@@ -311,6 +573,7 @@ export class FinancialTrackingService {
         notes: dto.notes,
       },
       include: {
+        ledgerCategory: true,
         client: { select: { id: true, name: true } },
         supplier: { select: { id: true, name: true } },
         invoice: { select: { id: true, invoiceNumber: true } },
@@ -398,6 +661,7 @@ export class FinancialTrackingService {
           entryType: true,
           amount: true,
           currency: true,
+          ledgerCategory: { select: { id: true, code: true, name: true } },
           notes: true,
           invoice: { select: { id: true, invoiceNumber: true } },
           salesOrder: { select: { id: true, orderNumber: true } },
@@ -548,6 +812,22 @@ export class FinancialTrackingService {
     return { estimatedCost, estimatedRevenueHt };
   }
 
+  private async ensureDefaultCategories() {
+    const existingCount = await this.prisma.ledgerCategory.count();
+    if (existingCount >= DEFAULT_LEDGER_CATEGORIES.length) {
+      return;
+    }
+
+    await this.prisma.ledgerCategory.createMany({
+      data: DEFAULT_LEDGER_CATEGORIES.map((category) => ({
+        ...category,
+        isSystem: true,
+        active: true,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
   private resolvePeriod(dateFrom?: string, dateTo?: string) {
     const to = dateTo ? new Date(dateTo) : new Date();
     const from = dateFrom
@@ -565,6 +845,17 @@ export class FinancialTrackingService {
     return {
       ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
       ...(dateTo ? { lte: new Date(dateTo) } : {}),
+    };
+  }
+
+  private buildOverlapFilter(dateFrom?: string, dateTo?: string) {
+    if (!dateFrom && !dateTo) {
+      return undefined;
+    }
+
+    return {
+      ...(dateTo ? { periodStart: { lte: new Date(dateTo) } } : {}),
+      ...(dateFrom ? { periodEnd: { gte: new Date(dateFrom) } } : {}),
     };
   }
 
@@ -592,6 +883,77 @@ export class FinancialTrackingService {
       }
       return balance;
     }, 0);
+  }
+
+  private buildCategoryBreakdown(
+    entries: Array<{
+      entryType: string;
+      amount: unknown;
+      ledgerCategoryId?: string | null;
+      ledgerCategory?: { id: string; code: string; name: string } | null;
+    }>,
+  ) {
+    const buckets = new Map<
+      string,
+      { id: string | null; code: string; name: string; entryType: string; amount: number }
+    >();
+
+    for (const entry of entries) {
+      const key = entry.ledgerCategory?.id ?? `uncategorized:${entry.entryType}`;
+      const bucket = buckets.get(key) ?? {
+        id: entry.ledgerCategory?.id ?? null,
+        code: entry.ledgerCategory?.code ?? 'UNCATEGORIZED',
+        name: entry.ledgerCategory?.name ?? 'Non categorise',
+        entryType: entry.entryType,
+        amount: 0,
+      };
+
+      bucket.amount += this.toNumber(entry.amount);
+      buckets.set(key, bucket);
+    }
+
+    return Array.from(buckets.values())
+      .map((bucket) => ({ ...bucket, amount: this.round2(bucket.amount) }))
+      .sort((a, b) => b.amount - a.amount);
+  }
+
+  private matchesBudgetEntry(
+    budget: {
+      direction: string;
+      periodStart: Date;
+      periodEnd: Date;
+      ledgerCategoryId?: string | null;
+      clientId?: string | null;
+      supplierId?: string | null;
+    },
+    entry: {
+      entryDate: Date;
+      entryType: string;
+      amount: unknown;
+      ledgerCategoryId?: string | null;
+      clientId?: string | null;
+      supplierId?: string | null;
+    },
+  ) {
+    const expectedEntryType = budget.direction === 'INCOME' ? 'INCOME' : 'EXPENSE';
+
+    if (entry.entryType !== expectedEntryType) {
+      return false;
+    }
+    if (entry.entryDate < budget.periodStart || entry.entryDate > budget.periodEnd) {
+      return false;
+    }
+    if (budget.ledgerCategoryId && entry.ledgerCategoryId !== budget.ledgerCategoryId) {
+      return false;
+    }
+    if (budget.clientId && entry.clientId !== budget.clientId) {
+      return false;
+    }
+    if (budget.supplierId && entry.supplierId !== budget.supplierId) {
+      return false;
+    }
+
+    return true;
   }
 
   private buildCostKey(productId: string, variantId: string | null) {

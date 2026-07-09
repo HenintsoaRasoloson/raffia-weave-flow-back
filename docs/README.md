@@ -12,6 +12,10 @@ Toute la documentation projet est centralisee dans ce dossier.
   - DASHBOARD_API.md
   - FRONTEND_INTEGRATION.md
   - CHECKLIST.md
+- financial-tracking/
+  - README.md
+  - FINANCIAL_TRACKING_API.md
+  - FRONTEND_INTEGRATION.md
 - notifications/
   - README.md
   - USAGE.md

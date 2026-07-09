@@ -48,6 +48,11 @@ export class ListLedgerEntriesQueryDto {
   @IsString()
   supplierId?: string;
 
+  @ApiPropertyOptional({ description: 'Filtre categorie financiere' })
+  @IsOptional()
+  @IsString()
+  ledgerCategoryId?: string;
+
   @ApiPropertyOptional({ description: 'Date debut (entryDate)' })
   @IsOptional()
   @IsDateString()

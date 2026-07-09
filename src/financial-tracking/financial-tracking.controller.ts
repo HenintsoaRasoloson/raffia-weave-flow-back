@@ -9,8 +9,11 @@ import {
 } from '@nestjs/swagger';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateFinancialBudgetDto } from './dto/create-financial-budget.dto';
+import { CreateLedgerCategoryDto } from './dto/create-ledger-category.dto';
 import { CreateLedgerEntryDto } from './dto/create-ledger-entry.dto';
 import { FinancialOverviewQueryDto } from './dto/financial-overview-query.dto';
+import { ListFinancialBudgetsQueryDto } from './dto/list-financial-budgets-query.dto';
 import { ListLedgerEntriesQueryDto } from './dto/list-ledger-entries-query.dto';
 import { FinancialTrackingService } from './financial-tracking.service';
 
@@ -39,6 +42,36 @@ export class FinancialTrackingController {
   @ApiOkResponse({ description: 'Ecritures de tresorerie paginees' })
   listLedgerEntries(@Query() query: ListLedgerEntriesQueryDto) {
     return this.financialTrackingService.listLedgerEntries(query);
+  }
+
+  @Get('categories')
+  @ApiOperation({ summary: 'Lister les categories structurees de suivi financier' })
+  @ApiOkResponse({ description: 'Categories financieres actives et systeme' })
+  listLedgerCategories() {
+    return this.financialTrackingService.listLedgerCategories();
+  }
+
+  @Post('categories')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Creer une categorie de suivi financier' })
+  @ApiCreatedResponse({ description: 'Categorie financiere creee' })
+  createLedgerCategory(@Body() dto: CreateLedgerCategoryDto) {
+    return this.financialTrackingService.createLedgerCategory(dto);
+  }
+
+  @Get('budgets')
+  @ApiOperation({ summary: 'Lister les budgets et l ecart reel vs prevision' })
+  @ApiOkResponse({ description: 'Budgets financiers consolides' })
+  listBudgets(@Query() query: ListFinancialBudgetsQueryDto) {
+    return this.financialTrackingService.listBudgets(query);
+  }
+
+  @Post('budgets')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Creer un budget de suivi financier' })
+  @ApiCreatedResponse({ description: 'Budget financier cree' })
+  createBudget(@Body() dto: CreateFinancialBudgetDto) {
+    return this.financialTrackingService.createBudget(dto);
   }
 
   @Post('ledger-entries')
