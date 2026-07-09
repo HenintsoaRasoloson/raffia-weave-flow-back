@@ -4,6 +4,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter';
+import { ApiResponseInterceptor } from './common/interceptors/api-response.interceptor';
 
 dotenv.config({ override: true });
 
@@ -47,6 +49,8 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  app.useGlobalInterceptors(new ApiResponseInterceptor());
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   const swaggerUser = process.env.SWAGGER_USER;
   const swaggerPassword = process.env.SWAGGER_PASSWORD;
