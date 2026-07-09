@@ -47,7 +47,11 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Lister les produits' })
+  @ApiOperation({
+    summary: 'Lister les produits',
+    description:
+      'Par defaut, la liste est allegee (sans variantes). Ajoutez includeVariants=true pour inclure les variantes.',
+  })
   @ApiPaginatedResponse(ProductResponseDto, 'Liste paginee des produits')
   findAll(@Query() query: ListQueryDto) {
     return this.productsService.findAll(query);

@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListQueryDto {
   @ApiPropertyOptional({ default: 1, minimum: 1 })
@@ -32,4 +32,13 @@ export class ListQueryDto {
   @IsOptional()
   @IsString()
   type?: string;
+
+  @ApiPropertyOptional({
+    description: 'Inclure les variantes dans la liste (false par defaut)',
+    default: false,
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  includeVariants?: boolean = false;
 }

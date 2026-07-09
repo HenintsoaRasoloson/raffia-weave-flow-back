@@ -25,6 +25,7 @@ export class ProductsService {
   findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const includeVariants = query.includeVariants ?? false;
     const where = {
       ...(query.status ? { status: query.status as any } : {}),
       ...(query.q
@@ -41,7 +42,10 @@ export class ProductsService {
       const [items, total] = await Promise.all([
         tx.product.findMany({
           where,
-          include: { category: true, variants: true },
+          include: {
+            category: true,
+            ...(includeVariants ? { variants: true } : {}),
+          },
           orderBy: { createdAt: 'desc' },
           skip: (page - 1) * pageSize,
           take: pageSize,
