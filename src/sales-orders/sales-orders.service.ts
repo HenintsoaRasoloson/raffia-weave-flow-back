@@ -113,9 +113,9 @@ export class SalesOrdersService {
       });
     }
 
-    // Notifier les rôles concernés
+    // Notifier les rôles concernés (dont le financier pour créer la proforma)
     await this.notificationsService.notifyRoles(
-      ['GERANT', 'RESPONSABLE_GENERAL'],
+      ['GERANT', 'RESPONSABLE_GENERAL', 'RESPONSABLE_FINANCIER_STOCKS'],
       {
         type: 'sales_order_created',
         title: 'Nouvelle commande client',

@@ -91,7 +91,7 @@ export class PurchaseOrdersService {
   async markReceived(id: string) {
     const purchaseOrder = await this.prisma.purchaseOrder.findUnique({
       where: { id },
-      select: { status: true },
+      include: { items: true },
     });
 
     if (!purchaseOrder) {
@@ -107,7 +107,7 @@ export class PurchaseOrdersService {
       throw new BadRequestException('Le bon de commande est deja recu');
     }
 
-    return this.prisma.purchaseOrder.update({
+    const updated = await this.prisma.purchaseOrder.update({
       where: { id },
       data: {
         status: 'RECEIVED',
@@ -115,6 +115,20 @@ export class PurchaseOrdersService {
       } as any,
       include: { supplier: true, items: true },
     });
+
+    // Mettre à jour le stock des composants reçus
+    for (const item of purchaseOrder.items) {
+      if (item.componentId) {
+        await this.prisma.component.update({
+          where: { id: item.componentId },
+          data: {
+            stockQty: { increment: item.quantity },
+          } as any,
+        }).catch(() => { /* composant supprimé entre-temps */ });
+      }
+    }
+
+    return updated;
   }
 
   remove(id: string) {

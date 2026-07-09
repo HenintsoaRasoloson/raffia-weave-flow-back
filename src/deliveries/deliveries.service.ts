@@ -78,7 +78,7 @@ export class DeliveriesService {
   async markDelivered(id: string) {
     const delivery = await this.prisma.delivery.findUnique({
       where: { id },
-      include: { productionOrder: { include: { salesOrder: { include: { client: true } } } } },
+      include: { salesOrder: true, client: true },
     });
     if (!delivery) {
       throw new NotFoundException('Livraison introuvable');
@@ -98,8 +98,16 @@ export class DeliveriesService {
         status: 'DELIVERED',
         deliveredAt: new Date(),
       } as any,
-      include: { productionOrder: { include: { salesOrder: { include: { client: true } } } } },
+      include: { salesOrder: true, client: true },
     });
+
+    // Passer la commande client en DELIVERED automatiquement
+    if (delivery.salesOrderId) {
+      await this.prisma.salesOrder.update({
+        where: { id: delivery.salesOrderId },
+        data: { status: 'DELIVERED' } as any,
+      }).catch(() => { /* commande déjà dans un statut terminal */ });
+    }
 
     // Notifier tous les rôles concernés
     await this.notificationsService.notifyRoles(
@@ -107,12 +115,12 @@ export class DeliveriesService {
       {
         type: 'delivery_completed',
         title: '🚚 Livraison effectuée',
-        message: `Client: ${updated.productionOrder?.salesOrder?.client?.name ?? 'Inconnu'} - ${updated.deliveryNumber}`,
+        message: `Client: ${delivery.client?.name ?? 'Inconnu'} - ${delivery.deliveryNumber}`,
         data: {
           deliveryId: id,
-          deliveryNumber: updated.deliveryNumber,
-          clientId: updated.productionOrder?.salesOrder?.clientId,
-          clientName: updated.productionOrder?.salesOrder?.client?.name,
+          deliveryNumber: delivery.deliveryNumber,
+          clientId: delivery.clientId,
+          clientName: delivery.client?.name,
         },
         actionUrl: `/deliveries/${id}`,
         priority: 'normal',

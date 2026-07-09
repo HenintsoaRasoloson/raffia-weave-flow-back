@@ -114,6 +114,23 @@ export class InvoicesService {
       });
     }
 
+    // Quand la proforma est créée, notifier le resp général pour qu'il l'envoie au client
+    if (dto.type === 'PROFORMA') {
+      this.notificationsService.notifyRole('RESPONSABLE_GENERAL', {
+        type: 'proforma_ready',
+        title: '📄 Proforma prête à envoyer',
+        message: `${created.invoiceNumber} - ${created.client?.name ?? 'Client'} (${totalTtc.toFixed(2)} ${dto.currency ?? 'EUR'})`,
+        data: {
+          invoiceId: created.id,
+          invoiceNumber: created.invoiceNumber,
+          clientName: created.client?.name,
+          totalTtc,
+        },
+        actionUrl: `/invoices/${created.id}`,
+        priority: 'normal',
+      }).catch((err) => console.error('Notification proforma error:', err));
+    }
+
     return created;
   }
 

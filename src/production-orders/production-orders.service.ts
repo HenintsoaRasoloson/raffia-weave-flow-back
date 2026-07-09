@@ -59,7 +59,7 @@ export class ProductionOrdersService {
     });
   }
 
-  create(dto: CreateProductionOrderDto, userId?: string) {
+  async create(dto: CreateProductionOrderDto, userId?: string) {
     const payload: Record<string, unknown> = { ...dto };
     if (dto.startDate) {
       payload.startDate = new Date(dto.startDate);
@@ -68,23 +68,29 @@ export class ProductionOrdersService {
       payload.endDate = new Date(dto.endDate);
     }
 
-    const created = this.prisma.productionOrder.create({
+    const created = await this.prisma.productionOrder.create({
       data: payload as any,
     });
 
+    // Passer la commande client en IN_PRODUCTION automatiquement
+    if (dto.salesOrderId) {
+      await this.prisma.salesOrder.update({
+        where: { id: dto.salesOrderId },
+        data: { status: 'IN_PRODUCTION' } as any,
+      }).catch(() => { /* commande inexistante ou déjà dans un statut terminal */ });
+    }
+
     if (userId) {
-      created.then((order) => {
-        this.auditService.log({
-          entityType: 'ProductionOrder',
-          entityId: order.id,
-          action: 'PRODUCTION_ORDER_CREATED',
-          userId,
-          changes: {
-            orderNumber: { after: dto.orderNumber },
-            quantity: { after: dto.quantity },
-            status: { after: dto.status ?? 'PLANNED' },
-          },
-        });
+      await this.auditService.log({
+        entityType: 'ProductionOrder',
+        entityId: created.id,
+        action: 'PRODUCTION_ORDER_CREATED',
+        userId,
+        changes: {
+          orderNumber: { after: dto.orderNumber },
+          quantity: { after: dto.quantity },
+          status: { after: dto.status ?? 'PLANNED' },
+        },
       });
     }
 
