@@ -262,6 +262,58 @@ Réponse (200 OK):
 
 ---
 
+### GET `/dashboard/calendar`
+
+**Calendrier global du planning (production, livraisons, achats).**
+
+Paramètres:
+
+- `from` (optionnel): Date début ISO (ex: `2026-07-01`)
+- `to` (optionnel): Date fin ISO (ex: `2026-10-31`)
+- `types` (optionnel): Liste séparée par virgule parmi `PRODUCTION,DELIVERY,PURCHASE`
+
+Réponse (200 OK):
+
+```json
+{
+  "from": "2026-07-01",
+  "to": "2026-10-31",
+  "total": 3,
+  "events": [
+    {
+      "id": "prod_ck...",
+      "type": "PRODUCTION",
+      "title": "OF/000120 - Cabas Madagascar",
+      "date": "2026-07-12T00:00:00.000Z",
+      "status": "IN_PROGRESS",
+      "reference": "OF/000120",
+      "entityId": "ck...",
+      "entityType": "productionOrder"
+    },
+    {
+      "id": "del_ck...",
+      "type": "DELIVERY",
+      "title": "LIV/000120 - Galeries Lafayette",
+      "date": "2026-07-15T00:00:00.000Z",
+      "status": "PREPARING",
+      "reference": "LIV/000120",
+      "entityId": "ck...",
+      "entityType": "delivery"
+    }
+  ]
+}
+```
+
+---
+
+### GET `/dashboard/calendrier`
+
+**Alias français de** `/dashboard/calendar` pour simplifier l'intégration de la page frontend `/calendrier`.
+
+Même paramètres et même format de réponse que `/dashboard/calendar`.
+
+---
+
 ## Exemples d'utilisation (Frontend)
 
 ### React Query avec TanStack React Router

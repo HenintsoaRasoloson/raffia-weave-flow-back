@@ -8,7 +8,17 @@ import {
   Alert,
   QuickStat,
   DashboardDto,
+  PlanningCalendarEvent,
+  PlanningCalendarResponse,
 } from './dto/dashboard.dto';
+
+type PlanningEventType = 'PRODUCTION' | 'DELIVERY' | 'PURCHASE';
+
+interface PlanningCalendarQuery {
+  from?: string;
+  to?: string;
+  types?: string;
+}
 
 @Injectable()
 export class DashboardService {
@@ -322,6 +332,31 @@ export class DashboardService {
   }
 
   /**
+   * Calendrier global du planning (production, livraisons, achats)
+   */
+  async getPlanningCalendar(query: PlanningCalendarQuery = {}): Promise<PlanningCalendarResponse> {
+    const { from, to } = this.resolvePlanningRange(query.from, query.to);
+    const types = this.resolvePlanningTypes(query.types);
+
+    const [productionEvents, deliveryEvents, purchaseEvents] = await Promise.all([
+      types.has('PRODUCTION') ? this.loadProductionCalendarEvents(from, to) : Promise.resolve([]),
+      types.has('DELIVERY') ? this.loadDeliveryCalendarEvents(from, to) : Promise.resolve([]),
+      types.has('PURCHASE') ? this.loadPurchaseCalendarEvents(from, to) : Promise.resolve([]),
+    ]);
+
+    const events = [...productionEvents, ...deliveryEvents, ...purchaseEvents].sort((a, b) => {
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+
+    return {
+      from: this.toIsoDate(from),
+      to: this.toIsoDate(to),
+      total: events.length,
+      events,
+    };
+  }
+
+  /**
    * Helper: Calculer le pourcentage de progression selon le statut
    */
   private calculateProgress(status: string): number {
@@ -333,5 +368,171 @@ export class DashboardService {
       'Contrôle': 85,
     };
     return progressMap[status] || 0;
+  }
+
+  private resolvePlanningRange(fromRaw?: string, toRaw?: string) {
+    const today = new Date();
+    const defaultFrom = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 15);
+    const defaultTo = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 90, 23, 59, 59, 999);
+
+    const parsedFrom = this.parseDateOnly(fromRaw) ?? defaultFrom;
+    const parsedTo = this.parseDateOnly(toRaw, true) ?? defaultTo;
+
+    if (parsedFrom.getTime() > parsedTo.getTime()) {
+      return { from: defaultFrom, to: defaultTo };
+    }
+
+    return { from: parsedFrom, to: parsedTo };
+  }
+
+  private resolvePlanningTypes(typesRaw?: string): Set<PlanningEventType> {
+    if (!typesRaw?.trim()) {
+      return new Set<PlanningEventType>(['PRODUCTION', 'DELIVERY', 'PURCHASE']);
+    }
+
+    const parsed = typesRaw
+      .split(',')
+      .map((part) => part.trim().toUpperCase())
+      .filter((part): part is PlanningEventType => {
+        return part === 'PRODUCTION' || part === 'DELIVERY' || part === 'PURCHASE';
+      });
+
+    if (parsed.length === 0) {
+      return new Set<PlanningEventType>(['PRODUCTION', 'DELIVERY', 'PURCHASE']);
+    }
+
+    return new Set<PlanningEventType>(parsed);
+  }
+
+  private async loadProductionCalendarEvents(
+    from: Date,
+    to: Date,
+  ): Promise<PlanningCalendarEvent[]> {
+    const orders = await this.prisma.productionOrder.findMany({
+      where: {
+        OR: [
+          { startDate: { gte: from, lte: to } },
+          { endDate: { gte: from, lte: to } },
+        ],
+      },
+      orderBy: [{ startDate: 'asc' }, { endDate: 'asc' }],
+      select: {
+        id: true,
+        orderNumber: true,
+        product: { select: { name: true } },
+        quantity: true,
+        status: true,
+        startDate: true,
+      },
+      take: 500,
+    });
+
+    return orders
+      .filter((order) => order.startDate)
+      .map((order) => ({
+        id: `prod-${order.id}`,
+        type: 'PRODUCTION' as const,
+        title: `${order.orderNumber} - ${order.product.name}`,
+        date: (order.startDate as Date).toISOString(),
+        status: String(order.status),
+        reference: order.orderNumber,
+        entityId: order.id,
+        entityType: 'productionOrder' as const,
+      }));
+  }
+
+  private async loadDeliveryCalendarEvents(
+    from: Date,
+    to: Date,
+  ): Promise<PlanningCalendarEvent[]> {
+    const deliveries = await this.prisma.delivery.findMany({
+      where: {
+        eta: {
+          gte: from,
+          lte: to,
+        },
+      },
+      orderBy: { eta: 'asc' },
+      select: {
+        id: true,
+        deliveryNumber: true,
+        status: true,
+        eta: true,
+        client: { select: { name: true } },
+      },
+      take: 500,
+    });
+
+    return deliveries
+      .filter((delivery) => delivery.eta)
+      .map((delivery) => ({
+        id: `del-${delivery.id}`,
+        type: 'DELIVERY' as const,
+        title: `${delivery.deliveryNumber} - ${delivery.client.name}`,
+        date: (delivery.eta as Date).toISOString(),
+        status: String(delivery.status),
+        reference: delivery.deliveryNumber,
+        entityId: delivery.id,
+        entityType: 'delivery' as const,
+      }));
+  }
+
+  private async loadPurchaseCalendarEvents(
+    from: Date,
+    to: Date,
+  ): Promise<PlanningCalendarEvent[]> {
+    const purchases = await this.prisma.purchaseOrder.findMany({
+      where: {
+        expectedAt: {
+          gte: from,
+          lte: to,
+        },
+      },
+      orderBy: { expectedAt: 'asc' },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        expectedAt: true,
+        supplier: { select: { name: true } },
+      },
+      take: 500,
+    });
+
+    return purchases
+      .filter((purchase) => purchase.expectedAt)
+      .map((purchase) => ({
+        id: `pur-${purchase.id}`,
+        type: 'PURCHASE' as const,
+        title: `${purchase.orderNumber} - ${purchase.supplier.name}`,
+        date: (purchase.expectedAt as Date).toISOString(),
+        status: String(purchase.status),
+        reference: purchase.orderNumber,
+        entityId: purchase.id,
+        entityType: 'purchaseOrder' as const,
+      }));
+  }
+
+  private parseDateOnly(raw?: string, endOfDay: boolean = false) {
+    if (!raw?.trim()) {
+      return null;
+    }
+
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    if (endOfDay) {
+      date.setHours(23, 59, 59, 999);
+    } else {
+      date.setHours(0, 0, 0, 0);
+    }
+
+    return date;
+  }
+
+  private toIsoDate(date: Date): string {
+    return date.toISOString().slice(0, 10);
   }
 }

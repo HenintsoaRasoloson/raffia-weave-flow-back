@@ -1,6 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
-import { DashboardDto } from './dto/dashboard.dto';
+import { DashboardDto, PlanningCalendarResponse } from './dto/dashboard.dto';
 
 @Controller('dashboard')
 export class DashboardController {
@@ -71,5 +71,30 @@ export class DashboardController {
   @Get('quick-stats')
   async getQuickStats() {
     return this.dashboardService.getQuickStats();
+  }
+
+  /**
+   * GET /dashboard/calendar
+   * Calendrier global du planning (production, livraisons, achats)
+   */
+  @Get('calendar')
+  async getPlanningCalendar(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('types') types?: string,
+  ): Promise<PlanningCalendarResponse> {
+    return this.dashboardService.getPlanningCalendar({ from, to, types });
+  }
+
+  /**
+   * Alias FR pour le frontend /calendrier
+   */
+  @Get('calendrier')
+  async getPlanningCalendrier(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('types') types?: string,
+  ): Promise<PlanningCalendarResponse> {
+    return this.dashboardService.getPlanningCalendar({ from, to, types });
   }
 }

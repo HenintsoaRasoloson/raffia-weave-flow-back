@@ -48,6 +48,24 @@ export class QuickStat {
   hint: string;
 }
 
+export class PlanningCalendarEvent {
+  id: string;
+  type: 'PRODUCTION' | 'DELIVERY' | 'PURCHASE';
+  title: string;
+  date: string;
+  status: string;
+  reference: string;
+  entityId: string;
+  entityType: 'productionOrder' | 'delivery' | 'purchaseOrder';
+}
+
+export class PlanningCalendarResponse {
+  from: string;
+  to: string;
+  total: number;
+  events: PlanningCalendarEvent[];
+}
+
 export class DashboardDto {
   kpis: KpiDto[];
   revenueSeries: RevenueSeries[];
