@@ -55,9 +55,14 @@ class CreateProductVariantDto {
 }
 
 export class CreateProductDto {
-  @ApiProperty({ example: 'S/123123' })
+  @ApiPropertyOptional({
+    example: 'S/123123',
+    description:
+      'Reference produit. Si absente, elle est generee automatiquement depuis la categorie.',
+  })
+  @IsOptional()
   @IsString()
-  ref!: string;
+  ref?: string;
 
   @ApiProperty({ example: 'Cabas Madagascar' })
   @IsString()

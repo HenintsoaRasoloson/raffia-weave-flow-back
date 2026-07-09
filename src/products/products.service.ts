@@ -343,11 +343,15 @@ export class ProductsService {
         throw new NotFoundException('Categorie introuvable');
       }
 
-      this.assertRefMatchesCategory(dto.ref, category);
+      const nextRef = dto.ref?.trim()
+        ? dto.ref.trim().toUpperCase()
+        : await this.generateUniqueProductRef(tx as any, category);
+
+      this.assertRefMatchesCategory(nextRef, category);
 
       return tx.product.create({
         data: {
-          ref: dto.ref.trim().toUpperCase(),
+          ref: nextRef,
           name: dto.name,
           description: dto.description,
           categoryId: dto.categoryId,
@@ -510,5 +514,30 @@ export class ProductsService {
       .toUpperCase();
 
     return (base.slice(0, 3) || 'CAT').toUpperCase();
+  }
+
+  private async generateUniqueProductRef(
+    tx: any,
+    category: { code: string | null; slug: string; name: string },
+  ) {
+    const prefix = this.getCategoryRefPrefix(category);
+
+    for (let i = 0; i < 10; i++) {
+      const randomPart = Math.floor(100000 + Math.random() * 900000).toString();
+      const candidate = `${prefix}/${randomPart}`;
+
+      const existing = await tx.product.findUnique({
+        where: { ref: candidate },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return candidate;
+      }
+    }
+
+    throw new BadRequestException(
+      'Impossible de generer une reference unique. Veuillez reessayer.',
+    );
   }
 }
