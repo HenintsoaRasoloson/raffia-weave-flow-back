@@ -16,7 +16,9 @@ Le frontend peut traiter le module comme un espace dedie avec cinq surfaces UI:
 ['financial-tracking', 'overview', filters][
   ('financial-tracking', 'categories')
 ][('financial-tracking', 'budgets', filters)][
-  ('financial-tracking', 'ledger-entries', filters)
+  ('financial-tracking', 'budget-alerts', filters)
+][('financial-tracking', 'ledger-entries', filters)][
+  ('financial-tracking', 'overdue-reminders', filters)
 ][('financial-tracking', 'client', clientId, filters)][
   ('purchase-order', purchaseOrderId)
 ];
@@ -89,6 +91,11 @@ Le frontend peut traiter le module comme un espace dedie avec cinq surfaces UI:
 
 Le backend renvoie deja actualAmount et variance. Le frontend n a pas a recalculer ces valeurs.
 
+### Alertes automatiques
+
+- GET /financial-tracking/budget-alerts pour afficher les budgets depasses
+- POST /financial-tracking/budget-alerts/notify pour pousser une alerte interne a la finance et a la direction
+
 ## Ecran 4 - Onglet finance sur fiche client
 
 ### Endpoint
@@ -102,6 +109,12 @@ Le backend renvoie deja actualAmount et variance. Le frontend n a pas a recalcul
 - liste recentPayments
 - mini journal financier client a partir de ledgerEntries
 - badge risque si overdueInvoicesCount > 0
+
+### Relances d impayes
+
+- GET /financial-tracking/overdue-reminders pour afficher les factures relancables
+- POST /financial-tracking/overdue-reminders/notify pour notifier le back-office en interne
+- le champ reminderMessage peut etre reutilise plus tard pour un email ou un message WhatsApp
 
 ### Navigation transverse
 
@@ -206,5 +219,7 @@ queryClient.invalidateQueries({ queryKey: ['client', clientId] });
 2. brancher GET /financial-tracking/overview
 3. brancher GET et POST /financial-tracking/ledger-entries
 4. brancher GET et POST /financial-tracking/budgets
-5. brancher GET /financial-tracking/clients/:clientId
-6. brancher POST /purchase-orders/:id/record-payment
+5. brancher GET /financial-tracking/budget-alerts et POST /financial-tracking/budget-alerts/notify
+6. brancher GET /financial-tracking/clients/:clientId
+7. brancher GET /financial-tracking/overdue-reminders et POST /financial-tracking/overdue-reminders/notify
+8. brancher POST /purchase-orders/:id/record-payment

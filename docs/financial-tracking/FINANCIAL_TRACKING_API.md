@@ -9,6 +9,8 @@ Le module de suivi financier centralise:
 - decaissements fournisseurs
 - budgets et ecarts
 - synthese financiere par client
+- relances d impayes internes
+- alertes internes de depassement budgetaire
 
 Tous les endpoints ci-dessous sont proteges par JWT. Les operations de creation utilisent en plus le role admin.
 
@@ -202,6 +204,73 @@ Liste les budgets et retourne directement le reel compare pour chaque budget.
 }
 ```
 
+## 5 bis. GET /financial-tracking/budget-alerts
+
+Previsualise les budgets de depense en depassement sur une periode.
+
+### Query params
+
+- dateFrom, dateTo: periode analysee. Par defaut, mois courant jusqu a maintenant.
+- ledgerCategoryId: filtre categorie.
+- minVarianceRate: seuil minimum en pourcentage.
+- minVarianceAmount: seuil minimum en montant.
+- limit: nombre max de lignes remontees.
+
+### Reponse type
+
+```json
+{
+  "period": {
+    "from": "2026-07-01T00:00:00.000Z",
+    "to": "2026-07-09T12:00:00.000Z"
+  },
+  "thresholds": {
+    "minVarianceRate": 10,
+    "minVarianceAmount": 300,
+    "limit": 20
+  },
+  "total": 1,
+  "totalVarianceAmount": 540,
+  "items": [
+    {
+      "id": "cly...",
+      "label": "Budget logistique juillet",
+      "ledgerCategory": {
+        "id": "cly...",
+        "code": "LOGISTICS",
+        "name": "Logistique"
+      },
+      "budgetAmount": 2500,
+      "actualAmount": 3040,
+      "variance": 540,
+      "varianceRate": 21.6,
+      "periodStart": "2026-07-01T00:00:00.000Z",
+      "periodEnd": "2026-07-31T23:59:59.999Z",
+      "alertMessage": "Budget Budget logistique juillet en depassement de 540.00 EUR (21.60%)."
+    }
+  ]
+}
+```
+
+## 5 ter. POST /financial-tracking/budget-alerts/notify
+
+Envoie les alertes budgetaires detectees aux roles internes:
+
+- RESPONSABLE_FINANCIER_STOCKS
+- GERANT
+
+### Body
+
+```json
+{
+  "dateFrom": "2026-07-01T00:00:00.000Z",
+  "dateTo": "2026-07-31T23:59:59.999Z",
+  "minVarianceRate": 10,
+  "minVarianceAmount": 300,
+  "limit": 20
+}
+```
+
 ## 6. GET /financial-tracking/ledger-entries
 
 Journal de tresorerie pagine.
@@ -298,6 +367,65 @@ Fiche financiere d un client.
   "ledgerEntries": []
 }
 ```
+
+## 8 bis. GET /financial-tracking/overdue-reminders
+
+Previsualise les factures en retard et les messages de relance suggeres.
+
+### Query params
+
+- clientId: filtre client.
+- minDaysOverdue: retard minimal en jours. Defaut 1.
+- minOutstandingAmount: reste a encaisser minimal.
+- asOf: date de reference pour calculer le retard.
+- limit: nombre max de factures.
+
+### Reponse type
+
+```json
+{
+  "asOf": "2026-07-09T12:00:00.000Z",
+  "total": 2,
+  "totalOutstandingAmount": 1800,
+  "items": [
+    {
+      "id": "cly...",
+      "invoiceNumber": "FAC/000188",
+      "dueDate": "2026-06-28T00:00:00.000Z",
+      "currency": "EUR",
+      "clientId": "cly...",
+      "clientName": "Galeries Lafayette",
+      "contactName": "Mme Martin",
+      "email": "achat@client.fr",
+      "phone": "+261340000000",
+      "outstandingAmount": 1800,
+      "daysOverdue": 11,
+      "reminderMessage": "Relance: facture FAC/000188 du client Galeries Lafayette, echeance 28/06/2026, retard 11 jour(s), reste 1800.00 EUR."
+    }
+  ]
+}
+```
+
+## 8 ter. POST /financial-tracking/overdue-reminders/notify
+
+Envoie des notifications internes de relance aux roles:
+
+- RESPONSABLE_FINANCIER_STOCKS pour chaque facture
+- GERANT pour la synthese
+
+### Body
+
+```json
+{
+  "minDaysOverdue": 7,
+  "minOutstandingAmount": 200,
+  "limit": 20
+}
+```
+
+### Limite fonctionnelle actuelle
+
+Ces endpoints ne contactent pas directement le client par email, SMS ou WhatsApp. Ils preparent et notifient le traitement interne; l envoi externe pourra etre branche plus tard.
 
 ## 9. POST /purchase-orders/:id/record-payment
 

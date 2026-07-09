@@ -24,9 +24,13 @@ Le module couvre quatre besoins metier relies entre eux:
 - GET /financial-tracking/categories
 - POST /financial-tracking/categories
 - GET /financial-tracking/budgets
+- GET /financial-tracking/budget-alerts
+- POST /financial-tracking/budget-alerts/notify
 - POST /financial-tracking/budgets
 - GET /financial-tracking/ledger-entries
 - POST /financial-tracking/ledger-entries
+- GET /financial-tracking/overdue-reminders
+- POST /financial-tracking/overdue-reminders/notify
 - GET /financial-tracking/clients/:clientId
 - POST /purchase-orders/:id/record-payment
 
@@ -35,3 +39,4 @@ Le module couvre quatre besoins metier relies entre eux:
 - Un paiement client enregistre sur une facture cree automatiquement une ecriture de tresorerie INCOME categorisee CLIENT_COLLECTION.
 - Un paiement fournisseur enregistre sur un bon de commande cree automatiquement une ecriture de tresorerie EXPENSE categorisee SUPPLIER_PAYMENT.
 - Les budgets comparent le reel a partir des ecritures du journal financier, pas a partir des seuls engagements.
+- Les relances d impayes et les alertes budgetaires envoient des notifications internes WebSocket aux roles financiers et de direction; elles ne contactent pas directement le client.

@@ -9,12 +9,14 @@ import {
 } from '@nestjs/swagger';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { BudgetAlertQueryDto } from './dto/budget-alert-query.dto';
 import { CreateFinancialBudgetDto } from './dto/create-financial-budget.dto';
 import { CreateLedgerCategoryDto } from './dto/create-ledger-category.dto';
 import { CreateLedgerEntryDto } from './dto/create-ledger-entry.dto';
 import { FinancialOverviewQueryDto } from './dto/financial-overview-query.dto';
 import { ListFinancialBudgetsQueryDto } from './dto/list-financial-budgets-query.dto';
 import { ListLedgerEntriesQueryDto } from './dto/list-ledger-entries-query.dto';
+import { OverdueReminderQueryDto } from './dto/overdue-reminder-query.dto';
 import { FinancialTrackingService } from './financial-tracking.service';
 
 @ApiTags('Suivi financier')
@@ -64,6 +66,52 @@ export class FinancialTrackingController {
   @ApiOkResponse({ description: 'Budgets financiers consolides' })
   listBudgets(@Query() query: ListFinancialBudgetsQueryDto) {
     return this.financialTrackingService.listBudgets(query);
+  }
+
+  @Get('overdue-reminders')
+  @ApiOperation({
+    summary: 'Previsualiser les relances d impayes',
+    description:
+      'Retourne les factures en retard, leur anciennete et le message de relance suggere.',
+  })
+  @ApiOkResponse({ description: 'Relances d impayes suggerees' })
+  previewOverdueReminders(@Query() query: OverdueReminderQueryDto) {
+    return this.financialTrackingService.previewOverdueReminders(query);
+  }
+
+  @Post('overdue-reminders/notify')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Notifier les impayes au responsable financier',
+    description:
+      'Envoie des notifications internes pour les factures en retard detectees par les filtres fournis.',
+  })
+  @ApiOkResponse({ description: 'Notifications de relance envoyees' })
+  notifyOverdueReminders(@Body() dto: OverdueReminderQueryDto) {
+    return this.financialTrackingService.notifyOverdueReminders(dto);
+  }
+
+  @Get('budget-alerts')
+  @ApiOperation({
+    summary: 'Previsualiser les depassements budgetaires',
+    description:
+      'Retourne les budgets en depassement sur la periode analysee et leur ecart reel vs prevision.',
+  })
+  @ApiOkResponse({ description: 'Alertes budgetaires detectees' })
+  previewBudgetAlerts(@Query() query: BudgetAlertQueryDto) {
+    return this.financialTrackingService.previewBudgetAlerts(query);
+  }
+
+  @Post('budget-alerts/notify')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Notifier les depassements budgetaires',
+    description:
+      'Envoie des notifications internes sur les budgets de depense qui depassent les seuils fournis.',
+  })
+  @ApiOkResponse({ description: 'Notifications budgetaires envoyees' })
+  notifyBudgetAlerts(@Body() dto: BudgetAlertQueryDto) {
+    return this.financialTrackingService.notifyBudgetAlerts(dto);
   }
 
   @Post('budgets')
