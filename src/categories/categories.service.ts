@@ -46,6 +46,7 @@ export class CategoriesService {
         name: dto.name,
         code: dto.code?.trim().toUpperCase(),
         slug: this.toSlug(dto.slug ?? dto.name),
+        refSequenceLength: dto.refSequenceLength ?? 6,
       },
     });
   }
@@ -67,6 +68,9 @@ export class CategoriesService {
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.code !== undefined ? { code: dto.code?.trim().toUpperCase() || null } : {}),
+        ...(dto.refSequenceLength !== undefined
+          ? { refSequenceLength: dto.refSequenceLength }
+          : {}),
         ...(dto.slug !== undefined
           ? { slug: this.toSlug(dto.slug) }
           : dto.name !== undefined

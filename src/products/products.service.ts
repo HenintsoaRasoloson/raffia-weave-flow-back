@@ -336,7 +336,13 @@ export class ProductsService {
     return this.prisma.$transaction(async (tx) => {
       const category = await tx.category.findUnique({
         where: { id: dto.categoryId },
-        select: { id: true, code: true, slug: true, name: true },
+        select: {
+          id: true,
+          code: true,
+          slug: true,
+          name: true,
+          refSequenceLength: true,
+        },
       });
 
       if (!category) {
@@ -393,7 +399,13 @@ export class ProductsService {
 
       const category = await tx.category.findUnique({
         where: { id: targetCategoryId },
-        select: { id: true, code: true, slug: true, name: true },
+        select: {
+          id: true,
+          code: true,
+          slug: true,
+          name: true,
+          refSequenceLength: true,
+        },
       });
 
       if (!category) {
@@ -476,7 +488,12 @@ export class ProductsService {
 
   private assertRefMatchesCategory(
     rawRef: string,
-    category: { code: string | null; slug: string; name: string },
+    category: {
+      code: string | null;
+      slug: string;
+      name: string;
+      refSequenceLength: number;
+    },
   ) {
     const ref = rawRef.trim().toUpperCase();
     if (!ref) {
@@ -494,6 +511,13 @@ export class ProductsService {
     if (!suffix) {
       throw new BadRequestException(
         'Reference invalide: ajoute un identifiant apres le prefixe de categorie',
+      );
+    }
+
+    const suffixRegex = this.getRefSuffixRegex(category.refSequenceLength);
+    if (!suffixRegex.test(suffix)) {
+      throw new BadRequestException(
+        `Reference invalide: la partie apres ${categoryPrefix}/ doit contenir exactement ${category.refSequenceLength} chiffres`,
       );
     }
   }
@@ -518,12 +542,18 @@ export class ProductsService {
 
   private async generateUniqueProductRef(
     tx: any,
-    category: { code: string | null; slug: string; name: string },
+    category: {
+      code: string | null;
+      slug: string;
+      name: string;
+      refSequenceLength: number;
+    },
   ) {
     const prefix = this.getCategoryRefPrefix(category);
+    const length = this.normalizeRefSequenceLength(category.refSequenceLength);
 
     for (let i = 0; i < 10; i++) {
-      const randomPart = Math.floor(100000 + Math.random() * 900000).toString();
+      const randomPart = this.generateNumericSuffix(length);
       const candidate = `${prefix}/${randomPart}`;
 
       const existing = await tx.product.findUnique({
@@ -539,5 +569,25 @@ export class ProductsService {
     throw new BadRequestException(
       'Impossible de generer une reference unique. Veuillez reessayer.',
     );
+  }
+
+  private getRefSuffixRegex(length: number) {
+    const normalizedLength = this.normalizeRefSequenceLength(length);
+    return new RegExp(`^\\d{${normalizedLength}}$`);
+  }
+
+  private normalizeRefSequenceLength(length?: number) {
+    if (!length || Number.isNaN(length)) {
+      return 6;
+    }
+    return Math.min(12, Math.max(1, Math.trunc(length)));
+  }
+
+  private generateNumericSuffix(length: number) {
+    let digits = '';
+    for (let i = 0; i < length; i++) {
+      digits += Math.floor(Math.random() * 10).toString();
+    }
+    return digits;
   }
 }

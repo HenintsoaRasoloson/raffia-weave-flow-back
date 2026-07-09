@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, Matches } from 'class-validator';
+import { IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 
 export class CreateCategoryDto {
   @ApiProperty({ example: 'Sac' })
@@ -22,4 +22,17 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsString()
   slug?: string;
+
+  @ApiPropertyOptional({
+    example: 6,
+    description:
+      'Nombre de chiffres de la partie numerique de la reference (ex: S/123123 => 6).',
+    minimum: 1,
+    maximum: 12,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  refSequenceLength?: number;
 }
