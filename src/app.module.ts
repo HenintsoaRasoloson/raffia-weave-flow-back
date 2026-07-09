@@ -19,6 +19,7 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { AuditModule } from './common/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { GedModule } from './ged/ged.module';
+import { ReferenceLookupModule } from './reference-lookup/reference-lookup.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { GedModule } from './ged/ged.module';
     NotificationsModule,
     AuditModule,
     GedModule,
+    ReferenceLookupModule,
   ],
   controllers: [AppController],
   providers: [AppService],
