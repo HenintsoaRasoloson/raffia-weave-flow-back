@@ -103,6 +103,8 @@ src/dashboard/
 ├── dashboard.module.ts              (13 lines)
 ├── dto/
 │   └── dashboard.dto.ts             (45 lines)
+
+docs/dashboard/
 ├── README.md                        (Quick start)
 ├── DASHBOARD_API.md                 (API reference)
 ├── FRONTEND_INTEGRATION.md          (React setup)

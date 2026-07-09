@@ -67,7 +67,8 @@ docker compose -f docker-compose.minio.yml up -d
 
 Documentation de structure et hierarchie:
 
-- `GED_MINIO_STRUCTURE.md`
+- `docs/README.md`
+- `docs/architecture/GED_MINIO_STRUCTURE.md`
 
 ## Deployment
 

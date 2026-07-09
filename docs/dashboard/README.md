@@ -11,6 +11,8 @@ src/dashboard/
 ├── dashboard.module.ts              → NestJS module
 ├── dto/
 │   └── dashboard.dto.ts             → TypeScript types
+
+docs/dashboard/
 ├── DASHBOARD_API.md                 → API reference
 ├── FRONTEND_INTEGRATION.md          → React setup guide
 └── CHECKLIST.md                     → Design conformance checklist
