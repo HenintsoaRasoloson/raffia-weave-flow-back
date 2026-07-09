@@ -34,6 +34,7 @@ import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductResponseDto } from './dto/product-response.dto';
+import { UpsertProductTechnicalSheetDto } from './dto/upsert-product-technical-sheet.dto';
 import { UploadProductImagesDto } from './dto/upload-product-images.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
@@ -57,6 +58,26 @@ export class ProductsController {
   @ApiOkResponse({ description: 'Produit trouvé', type: ProductResponseDto })
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
+  }
+
+  @Get(':id/technical-sheet')
+  @ApiOperation({ summary: 'Récupérer la fiche technique atelier du produit' })
+  @ApiOkResponse({ description: 'Fiche technique du produit' })
+  getTechnicalSheet(@Param('id') id: string) {
+    return this.productsService.getTechnicalSheet(id);
+  }
+
+  @Post(':id/technical-sheet')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Créer ou mettre à jour la fiche technique (recette détaillée) du produit',
+  })
+  @ApiOkResponse({ description: 'Fiche technique enregistrée' })
+  upsertTechnicalSheet(
+    @Param('id') id: string,
+    @Body() dto: UpsertProductTechnicalSheetDto,
+  ) {
+    return this.productsService.upsertTechnicalSheet(id, dto);
   }
 
   @Get(':id/images')

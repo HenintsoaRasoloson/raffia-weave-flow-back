@@ -150,6 +150,19 @@ enum CompressionAlgo {
   GZIP
 }
 
+enum ProductTechnicalElementCategory {
+  CROCHET
+  RAPHIA
+  LEATHER
+  ACCESSORY
+  LINING
+  HANDLE
+  HARDWARE
+  LABEL
+  PACKAGING
+  OTHER
+}
+
 enum CatalogShareStatus {
   ACTIVE
   EXPIRED
@@ -294,8 +307,44 @@ model Product {
   shareLinks       CatalogShareProduct[]
   invoiceItems     InvoiceItem[]
   productImages    ProductImage[]
+  technicalSheet   ProductTechnicalSheet?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+}
+
+model ProductTechnicalSheet {
+  id            String                        @id @default(cuid())
+  productId     String                        @unique
+  product       Product                       @relation(fields: [productId], references: [id])
+  version       Int                           @default(1)
+  title         String?
+  workshopNotes String?
+  instructions  String?
+  elements      ProductTechnicalSheetElement[]
+  createdAt     DateTime                      @default(now())
+  updatedAt     DateTime                      @updatedAt
+}
+
+model ProductTechnicalSheetElement {
+  id               String                         @id @default(cuid())
+  technicalSheetId String
+  technicalSheet   ProductTechnicalSheet          @relation(fields: [technicalSheetId], references: [id])
+  sequence         Int                            @default(1)
+  name             String
+  category         ProductTechnicalElementCategory @default(OTHER)
+  componentType    String?
+  material         String?
+  color            String?
+  dimensions       String?
+  sizeLabel        String?
+  quantity         Decimal?                       @db.Decimal(14, 4)
+  unit             MaterialUnit?
+  isOptional       Boolean                        @default(false)
+  notes            String?
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+
+  @@index([technicalSheetId, sequence])
 }
 
 model ProductImage {

@@ -11,6 +11,7 @@ import { GedPathsService } from '../ged/ged-paths.service';
 import { MinioService } from '../ged/minio.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
+import { UpsertProductTechnicalSheetDto } from './dto/upsert-product-technical-sheet.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
@@ -61,6 +62,13 @@ export class ProductsService {
           variants: true,
           bomItems: true,
           productImages: { orderBy: { createdAt: 'desc' } },
+          technicalSheet: {
+            include: {
+              elements: {
+                orderBy: { sequence: 'asc' },
+              },
+            },
+          },
         },
       })
       .then((product) => {
@@ -89,6 +97,99 @@ export class ProductsService {
           version: this.extractVersion(item.objectKey ?? item.storagePath),
         })),
       );
+  }
+
+  async getTechnicalSheet(productId: string) {
+    await this.ensureProductExists(productId);
+
+    const sheet = await this.prisma.productTechnicalSheet.findUnique({
+      where: { productId },
+      include: {
+        elements: {
+          orderBy: { sequence: 'asc' },
+        },
+      },
+    });
+
+    if (sheet) {
+      return sheet;
+    }
+
+    return {
+      productId,
+      version: 0,
+      title: null,
+      instructions: null,
+      workshopNotes: null,
+      elements: [],
+      isDraft: true,
+    };
+  }
+
+  async upsertTechnicalSheet(productId: string, dto: UpsertProductTechnicalSheetDto) {
+    await this.ensureProductExists(productId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.productTechnicalSheet.findUnique({
+        where: { productId },
+        select: { id: true, version: true },
+      });
+
+      const nextVersion = existing ? existing.version + 1 : 1;
+
+      const sheet = existing
+        ? await tx.productTechnicalSheet.update({
+            where: { productId },
+            data: {
+              title: dto.title,
+              instructions: dto.instructions,
+              workshopNotes: dto.workshopNotes,
+              version: nextVersion,
+            },
+          })
+        : await tx.productTechnicalSheet.create({
+            data: {
+              productId,
+              title: dto.title,
+              instructions: dto.instructions,
+              workshopNotes: dto.workshopNotes,
+              version: nextVersion,
+            },
+          });
+
+      await tx.productTechnicalSheetElement.deleteMany({
+        where: { technicalSheetId: sheet.id },
+      });
+
+      if (dto.elements.length > 0) {
+        await tx.productTechnicalSheetElement.createMany({
+          data: dto.elements.map((element) => ({
+            technicalSheetId: sheet.id,
+            sequence: element.sequence,
+            name: element.name,
+            category: element.category as any,
+            componentType: element.componentType,
+            material: element.material,
+            color: element.color,
+            dimensions: element.dimensions,
+            sizeLabel: element.sizeLabel,
+            quantity: element.quantity,
+            unit: (element.unit ?? null) as any,
+            isOptional: element.isOptional ?? false,
+            notes: element.notes,
+          })),
+        });
+      }
+
+      return tx.productTechnicalSheet.findUnique({
+        where: { id: sheet.id },
+        include: {
+          elements: {
+            orderBy: { sequence: 'asc' },
+          },
+        },
+      });
+    });
   }
 
   async uploadImages(
