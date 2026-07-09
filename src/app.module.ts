@@ -20,6 +20,7 @@ import { AuditModule } from './common/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { GedModule } from './ged/ged.module';
 import { ReferenceLookupModule } from './reference-lookup/reference-lookup.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ReferenceLookupModule } from './reference-lookup/reference-lookup.modul
     AuditModule,
     GedModule,
     ReferenceLookupModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [AppService],
