@@ -374,6 +374,8 @@ model ProductionOrder {
   endDate          DateTime?
   progress         Int               @default(0)
   status           ProductionStatus  @default(PLANNED)
+  // Validation qualité : passe à true après contrôle conformité (avant livraison)
+  qualityApproved  Boolean           @default(false)
   stages           ProductionStep[]
   calendarEvents   CalendarEvent[]
   createdAt        DateTime          @default(now())
@@ -459,6 +461,9 @@ model Invoice {
   issueDate     DateTime
   dueDate       DateTime?
   paidAt        DateTime?
+  // Montant déjà encaissé (acompte + éventuels versements partiels)
+  // PARTIALLY_PAID si paidAmount < totalTtc, PAID si paidAmount >= totalTtc
+  paidAmount    Decimal?       @db.Decimal(12, 2)
   items         InvoiceItem[]
   subtotalHt    Decimal        @db.Decimal(12, 2)
   taxAmount     Decimal        @db.Decimal(12, 2)

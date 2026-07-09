@@ -6,6 +6,7 @@ import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceResponseDto } from './dto/invoice-response.dto';
+import { RecordPaymentDto } from './dto/record-payment.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoicesService } from './invoices.service';
 
@@ -48,13 +49,26 @@ export class InvoicesController {
 
   @Patch(':id/mark-paid')
   @UseGuards(AdminGuard)
-  @ApiOperation({ summary: 'Marquer une facture comme payée' })
+  @ApiOperation({ summary: 'Marquer une facture comme intégralement payée (raccourci)' })
   @ApiOkResponse({
     description: 'Facture marquée payée',
     type: InvoiceResponseDto,
   })
   markPaid(@Param('id') id: string) {
     return this.invoicesService.markPaid(id);
+  }
+
+  @Post(':id/record-payment')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Enregistrer un paiement (acompte ou solde)',
+    description:
+      'Ajoute un montant encaissé. Passe automatiquement en PARTIALLY_PAID ' +
+      'ou PAID selon si le total TTC est atteint.',
+  })
+  @ApiOkResponse({ description: 'Paiement enregistré', type: InvoiceResponseDto })
+  recordPayment(@Param('id') id: string, @Body() dto: RecordPaymentDto) {
+    return this.invoicesService.recordPayment(id, dto);
   }
 
   @Delete(':id')

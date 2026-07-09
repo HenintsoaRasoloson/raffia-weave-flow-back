@@ -73,4 +73,28 @@ export class ProductionOrdersController {
   remove(@Param('id') id: string) {
     return this.productionOrdersService.remove(id);
   }
+
+  @Get(':id/check-materials')
+  @ApiOperation({
+    summary: 'Vérifier la disponibilité des matières premières',
+    description:
+      'Compare la nomenclature (BOM) × quantité de l\'OF avec le stock disponible. ' +
+      'Retourne la liste des composants avec manque éventuel.',
+  })
+  @ApiOkResponse({ description: 'Résultat du check matières' })
+  checkMaterials(@Param('id') id: string) {
+    return this.productionOrdersService.checkMaterials(id);
+  }
+
+  @Patch(':id/approve-quality')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Valider la conformité qualité d\'un OF terminé',
+    description:
+      'Marque l\'OF comme conforme après contrôle. Prérequis : statut COMPLETED.',
+  })
+  @ApiOkResponse({ description: 'OF validé qualité', type: ProductionOrderResponseDto })
+  approveQuality(@Param('id') id: string) {
+    return this.productionOrdersService.approveQuality(id);
+  }
 }

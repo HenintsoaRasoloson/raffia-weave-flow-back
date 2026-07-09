@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { RecordPaymentDto } from './dto/record-payment.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 
 @Injectable()
@@ -112,7 +113,7 @@ export class InvoicesService {
   async markPaid(id: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      select: { status: true, type: true },
+      select: { status: true, type: true, totalTtc: true },
     });
     if (!invoice) {
       throw new NotFoundException('Facture introuvable');
@@ -138,7 +139,49 @@ export class InvoicesService {
       data: {
         status: 'PAID',
         paidAt: new Date(),
+        paidAmount: invoice.totalTtc,
       } as any,
+    });
+  }
+
+  async recordPayment(id: string, dto: RecordPaymentDto) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      select: { status: true, type: true, totalTtc: true, paidAmount: true },
+    });
+    if (!invoice) {
+      throw new NotFoundException('Facture introuvable');
+    }
+    if ((invoice.status as unknown as string) === 'PAID') {
+      throw new BadRequestException('La facture est déjà intégralement payée');
+    }
+    if (['CANCELLED', 'DRAFT'].includes(invoice.status as unknown as string)) {
+      throw new BadRequestException(
+        `Impossible d\'enregistrer un paiement sur une facture ${invoice.status}`,
+      );
+    }
+
+    const alreadyPaid = Number(invoice.paidAmount ?? 0);
+    const total = Number(invoice.totalTtc);
+    const newPaidAmount = alreadyPaid + dto.amount;
+
+    if (newPaidAmount > total) {
+      throw new BadRequestException(
+        `Le montant encaissé (${newPaidAmount}) dépasse le total TTC (${total})`,
+      );
+    }
+
+    const isFullyPaid = newPaidAmount >= total;
+    const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date();
+
+    return this.prisma.invoice.update({
+      where: { id },
+      data: {
+        paidAmount: newPaidAmount,
+        status: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
+        paidAt: isFullyPaid ? paidAt : null,
+      } as any,
+      include: { items: true, client: true },
     });
   }
 

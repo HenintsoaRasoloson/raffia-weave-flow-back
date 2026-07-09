@@ -124,4 +124,71 @@ export class ProductionOrdersService {
   remove(id: string) {
     return this.prisma.productionOrder.delete({ where: { id } });
   }
+
+  async checkMaterials(id: string) {
+    const order = await this.prisma.productionOrder.findUnique({
+      where: { id },
+      select: {
+        quantity: true,
+        product: {
+          select: {
+            name: true,
+            bomItems: {
+              include: { component: true },
+            },
+          },
+        },
+      },
+    });
+    if (!order) {
+      throw new NotFoundException('Ordre de fabrication introuvable');
+    }
+
+    const results = order.product.bomItems.map((bom) => {
+      const needed = Number(bom.quantity) * order.quantity;
+      const available = Number(bom.component.stockQty);
+      const missing = Math.max(0, needed - available);
+      return {
+        componentId: bom.component.id,
+        componentRef: bom.component.ref,
+        componentName: bom.component.name,
+        unit: bom.component.unit,
+        origin: bom.component.origin,
+        needed,
+        available,
+        missing,
+        ok: missing === 0,
+      };
+    });
+
+    return {
+      productionOrderId: id,
+      productName: order.product.name,
+      quantity: order.quantity,
+      ready: results.every((r) => r.ok),
+      items: results,
+    };
+  }
+
+  async approveQuality(id: string) {
+    const order = await this.prisma.productionOrder.findUnique({
+      where: { id },
+      select: { status: true, qualityApproved: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Ordre de fabrication introuvable');
+    }
+    if ((order.status as unknown as string) !== 'COMPLETED') {
+      throw new BadRequestException(
+        'La validation qualité n\'est possible que sur un OF terminé (COMPLETED)',
+      );
+    }
+    if (order.qualityApproved) {
+      throw new BadRequestException('Cet OF a déjà été validé en qualité');
+    }
+    return this.prisma.productionOrder.update({
+      where: { id },
+      data: { qualityApproved: true } as any,
+    });
+  }
 }
