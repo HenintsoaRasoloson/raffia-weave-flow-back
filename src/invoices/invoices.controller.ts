@@ -1,5 +1,34 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Res,
+  StreamableFile,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { createReadStream, existsSync, mkdirSync } from 'fs';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -9,8 +38,20 @@ import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.d
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceResponseDto } from './dto/invoice-response.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
+import { UploadInvoiceDocumentDto } from './dto/upload-invoice-document.dto';
+import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoicesService } from './invoices.service';
+
+const INVOICE_UPLOAD_DIR = process.env.INVOICE_UPLOAD_DIR ?? 'uploads/invoices';
+
+function sanitizeFilename(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+if (!existsSync(INVOICE_UPLOAD_DIR)) {
+  mkdirSync(INVOICE_UPLOAD_DIR, { recursive: true });
+}
 
 @ApiTags('Factures')
 @UseGuards(JwtAuthGuard)
@@ -18,6 +59,31 @@ import { InvoicesService } from './invoices.service';
 @Controller('invoices')
 export class InvoicesController {
   constructor(private readonly invoicesService: InvoicesService) {}
+
+  @Get('templates')
+  @ApiOperation({ summary: 'Lister les templates de facture configurés' })
+  @ApiOkResponse({ description: 'Templates de facture' })
+  listTemplates() {
+    return this.invoicesService.listTemplates();
+  }
+
+  @Get('templates/:type')
+  @ApiOperation({ summary: 'Récupérer le template d\'un type de facture' })
+  @ApiOkResponse({ description: 'Template trouvé' })
+  getTemplate(@Param('type') type: string) {
+    return this.invoicesService.getTemplate(type);
+  }
+
+  @Put('templates/:type')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Créer ou mettre à jour le template d\'un type de facture' })
+  @ApiOkResponse({ description: 'Template upserté' })
+  upsertTemplate(
+    @Param('type') type: string,
+    @Body() dto: UpsertInvoiceTemplateDto,
+  ) {
+    return this.invoicesService.upsertTemplate(type, dto);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Lister les factures' })
@@ -31,6 +97,86 @@ export class InvoicesController {
   @ApiOkResponse({ description: 'Facture trouvée', type: InvoiceResponseDto })
   findOne(@Param('id') id: string) {
     return this.invoicesService.findOne(id);
+  }
+
+  @Get(':id/documents')
+  @ApiOperation({ summary: 'Lister les fichiers uploadés sur une facture' })
+  @ApiOkResponse({ description: 'Documents de la facture' })
+  listDocuments(@Param('id') id: string) {
+    return this.invoicesService.listDocuments(id);
+  }
+
+  @Post(':id/documents')
+  @UseGuards(AdminGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: INVOICE_UPLOAD_DIR,
+        filename: (_, file, cb) => {
+          const now = Date.now();
+          const safeName = sanitizeFilename(file.originalname);
+          cb(null, `${now}-${safeName}`);
+        },
+      }),
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
+      fileFilter: (_, file, cb) => {
+        const allowed = [
+          'application/pdf',
+          'image/png',
+          'image/jpeg',
+          'image/webp',
+        ];
+        cb(null, allowed.includes(file.mimetype));
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Uploader une facture signée/cachetée (PDF ou image)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        kind: {
+          type: 'string',
+          enum: ['SIGNED', 'STAMPED', 'SIGNED_AND_STAMPED', 'OTHER'],
+        },
+        note: { type: 'string' },
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['kind', 'file'],
+    },
+  })
+  @ApiCreatedResponse({ description: 'Document uploadé' })
+  uploadDocument(
+    @Param('id') id: string,
+    @Body() dto: UploadInvoiceDocumentDto,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.invoicesService.uploadDocument(id, dto, file, user.sub);
+  }
+
+  @Get(':id/documents/:documentId/download')
+  @ApiOperation({ summary: 'Télécharger un document uploadé (signé/cacheté)' })
+  @ApiParam({ name: 'id', description: 'ID facture' })
+  @ApiParam({ name: 'documentId', description: 'ID document facture' })
+  async downloadDocument(
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const doc = await this.invoicesService.getDocumentForDownload(id, documentId);
+    res.setHeader('Content-Type', doc.mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${sanitizeFilename(doc.originalName)}${extname(doc.originalName) ? '' : extname(doc.storedName)}"`,
+    );
+    return new StreamableFile(createReadStream(doc.storagePath));
   }
 
   @Post()

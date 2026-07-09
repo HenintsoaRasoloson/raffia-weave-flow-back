@@ -5,7 +5,11 @@ import { AuditService } from '../common/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
+import { UploadInvoiceDocumentDto } from './dto/upload-invoice-document.dto';
+import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+
+const INVOICE_TYPES = ['PROFORMA', 'DEPOSIT', 'INTERMEDIATE', 'FINAL', 'CREDIT_NOTE'] as const;
 
 @Injectable()
 export class InvoicesService {
@@ -50,7 +54,108 @@ export class InvoicesService {
   findOne(id: string) {
     return this.prisma.invoice.findUnique({
       where: { id },
-      include: { client: true, salesOrder: true, items: true, payments: true },
+      include: {
+        client: true,
+        salesOrder: true,
+        items: true,
+        payments: true,
+        documents: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+  }
+
+  async listDocuments(invoiceId: string) {
+    await this.ensureInvoiceExists(invoiceId);
+    return this.prisma.invoiceDocument.findMany({
+      where: { invoiceId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async uploadDocument(
+    invoiceId: string,
+    dto: UploadInvoiceDocumentDto,
+    file: Express.Multer.File,
+    userId?: string,
+  ) {
+    await this.ensureInvoiceExists(invoiceId);
+    if (!file) {
+      throw new BadRequestException('Aucun fichier reçu. Champ attendu: file');
+    }
+
+    return this.prisma.invoiceDocument.create({
+      data: {
+        invoiceId,
+        kind: dto.kind as any,
+        originalName: file.originalname,
+        storedName: file.filename,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        storagePath: file.path,
+        uploadedById: userId,
+      },
+    });
+  }
+
+  async getDocumentForDownload(invoiceId: string, documentId: string) {
+    const document = await this.prisma.invoiceDocument.findFirst({
+      where: {
+        id: documentId,
+        invoiceId,
+      },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document de facture introuvable');
+    }
+
+    return document;
+  }
+
+  listTemplates() {
+    return this.prisma.invoiceTemplate.findMany({ orderBy: { type: 'asc' } });
+  }
+
+  async getTemplate(type: string) {
+    const normalizedType = this.normalizeInvoiceType(type);
+
+    const existing = await this.prisma.invoiceTemplate.findUnique({
+      where: { type: normalizedType as any },
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    return {
+      type: normalizedType,
+      name: `Template ${normalizedType}`,
+      subject: `Facture {{invoiceNumber}} - ${normalizedType}`,
+      body:
+        'Bonjour {{clientName}},\n\nVeuillez trouver votre facture {{invoiceNumber}} de {{totalTtc}} {{currency}}.\n\nMerci pour votre confiance.',
+      footer: 'Raffia Weave Flow',
+      isDefault: true,
+    };
+  }
+
+  upsertTemplate(type: string, dto: UpsertInvoiceTemplateDto) {
+    const normalizedType = this.normalizeInvoiceType(type);
+
+    return this.prisma.invoiceTemplate.upsert({
+      where: { type: normalizedType as any },
+      update: {
+        name: dto.name,
+        subject: dto.subject,
+        body: dto.body,
+        footer: dto.footer,
+      },
+      create: {
+        type: normalizedType as any,
+        name: dto.name,
+        subject: dto.subject,
+        body: dto.body,
+        footer: dto.footer,
+      },
     });
   }
 
@@ -232,7 +337,7 @@ export class InvoicesService {
   async recordPayment(id: string, dto: RecordPaymentDto, userId?: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      select: { status: true, type: true, totalTtc: true, paidAmount: true },
+      select: { status: true, type: true, totalTtc: true, paidAmount: true, currency: true },
     });
     if (!invoice) {
       throw new NotFoundException('Facture introuvable');
@@ -349,5 +454,27 @@ export class InvoicesService {
 
   remove(id: string) {
     return this.prisma.invoice.delete({ where: { id } });
+  }
+
+  private normalizeInvoiceType(type: string): (typeof INVOICE_TYPES)[number] {
+    const normalized = type?.toUpperCase();
+    if (!INVOICE_TYPES.includes(normalized as (typeof INVOICE_TYPES)[number])) {
+      throw new BadRequestException(
+        `Type de facture invalide. Valeurs autorisées: ${INVOICE_TYPES.join(', ')}`,
+      );
+    }
+
+    return normalized as (typeof INVOICE_TYPES)[number];
+  }
+
+  private async ensureInvoiceExists(invoiceId: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { id: true },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException('Facture introuvable');
+    }
   }
 }
