@@ -39,6 +39,14 @@ enum MaterialUnit {
   BOBBIN
 }
 
+// Origine d'un composant/matière première :
+// PURCHASED  = acheté à un fournisseur (ex: raphia brut, anneaux métal)
+// MANUFACTURED = fabriqué en interne avant d'être utilisé (ex: plaque de raphia tressée, sangle découpée)
+enum ComponentOrigin {
+  PURCHASED
+  MANUFACTURED
+}
+
 enum SalesOrderStatus {
   QUOTE
   TO_PROCESS
@@ -263,19 +271,22 @@ model Supplier {
 }
 
 model Component {
-  id                 String              @id @default(cuid())
-  ref                String              @unique
+  id                 String            @id @default(cuid())
+  ref                String            @unique
   name               String
   unit               MaterialUnit
-  stockQty           Decimal             @db.Decimal(14, 3)
-  minQty             Decimal             @db.Decimal(14, 3)
-  costPerUnit        Decimal?            @db.Decimal(12, 4)
+  // PURCHASED  : raphia brut, anneaux métal, sangles achetées → liés à un fournisseur
+  // MANUFACTURED : plaque de raphia, sangle découpée → fabriqués en interne (supplierId = null)
+  origin             ComponentOrigin   @default(PURCHASED)
+  stockQty           Decimal           @db.Decimal(14, 3)
+  minQty             Decimal           @db.Decimal(14, 3)
+  costPerUnit        Decimal?          @db.Decimal(12, 4)
   supplierId         String?
-  supplier           Supplier?           @relation(fields: [supplierId], references: [id])
+  supplier           Supplier?         @relation(fields: [supplierId], references: [id])
   bomItems           BomItem[]
   purchaseOrderItems PurchaseOrderItem[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 }
 
 model BomItem {
