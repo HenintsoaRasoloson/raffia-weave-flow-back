@@ -5,6 +5,10 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 
+const BUSINESS_DOC_SCOPE = 'business-documents';
+const BUSINESS_DOC_LEVEL_LENGTH = 6;
+const DELIVERY_PREFIX = 'LIV';
+
 @Injectable()
 export class DeliveriesService {
   constructor(
@@ -53,25 +57,94 @@ export class DeliveriesService {
   }
 
   create(dto: CreateDeliveryDto) {
-    const payload: Record<string, unknown> = { ...dto };
-    if (dto.eta) {
-      payload.eta = new Date(dto.eta);
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const salesOrder = await tx.salesOrder.findUnique({
+        where: { id: dto.salesOrderId },
+        select: { id: true, referenceLevel: true },
+      });
 
-    return this.prisma.delivery.create({
-      data: payload as any,
+      if (!salesOrder) {
+        throw new NotFoundException('Commande liee introuvable');
+      }
+
+      let referenceLevel = salesOrder.referenceLevel;
+      if (referenceLevel === null) {
+        referenceLevel = await this.allocateNextReferenceLevel(tx as any);
+        await tx.salesOrder.update({
+          where: { id: salesOrder.id },
+          data: { referenceLevel },
+        });
+      }
+
+      let deliveryNumber: string;
+      if (dto.deliveryNumber?.trim()) {
+        const parsed = this.parseDeliveryNumber(dto.deliveryNumber);
+        if (parsed.level !== referenceLevel) {
+          throw new BadRequestException(
+            `Reference livraison invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${referenceLevel}`,
+          );
+        }
+        deliveryNumber = parsed.number;
+      } else {
+        deliveryNumber = this.buildDeliveryNumber(referenceLevel);
+      }
+
+      const payload: Record<string, unknown> = {
+        ...dto,
+        deliveryNumber,
+        referenceLevel,
+      };
+      if (dto.eta) {
+        payload.eta = new Date(dto.eta);
+      }
+
+      return tx.delivery.create({
+        data: payload as any,
+      });
     });
   }
 
   update(id: string, dto: UpdateDeliveryDto) {
-    const payload: Record<string, unknown> = { ...dto };
-    if (dto.eta) {
-      payload.eta = new Date(dto.eta);
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.delivery.findUnique({
+        where: { id },
+        select: { id: true, referenceLevel: true, salesOrderId: true },
+      });
+      if (!current) {
+        throw new NotFoundException('Livraison introuvable');
+      }
 
-    return this.prisma.delivery.update({
-      where: { id },
-      data: payload as any,
+      const targetSalesOrderId = dto.salesOrderId ?? current.salesOrderId;
+      const salesOrder = await tx.salesOrder.findUnique({
+        where: { id: targetSalesOrderId },
+        select: { referenceLevel: true },
+      });
+      if (!salesOrder || salesOrder.referenceLevel === null) {
+        throw new BadRequestException(
+          'Impossible de mettre a jour la livraison: reference de commande absente',
+        );
+      }
+
+      const payload: Record<string, unknown> = { ...dto };
+      if (dto.deliveryNumber !== undefined) {
+        const parsed = this.parseDeliveryNumber(dto.deliveryNumber);
+        if (parsed.level !== salesOrder.referenceLevel) {
+          throw new BadRequestException(
+            `Reference livraison invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${salesOrder.referenceLevel}`,
+          );
+        }
+        payload.deliveryNumber = parsed.number;
+        payload.referenceLevel = parsed.level;
+      }
+
+      if (dto.eta) {
+        payload.eta = new Date(dto.eta);
+      }
+
+      return tx.delivery.update({
+        where: { id },
+        data: payload as any,
+      });
     });
   }
 
@@ -133,5 +206,40 @@ export class DeliveriesService {
 
   remove(id: string) {
     return this.prisma.delivery.delete({ where: { id } });
+  }
+
+  private buildDeliveryNumber(level: number) {
+    return `${DELIVERY_PREFIX}/${level
+      .toString()
+      .padStart(BUSINESS_DOC_LEVEL_LENGTH, '0')}`;
+  }
+
+  private parseDeliveryNumber(rawDeliveryNumber: string) {
+    const normalized = rawDeliveryNumber.trim().toUpperCase();
+    const regex = new RegExp(
+      `^${DELIVERY_PREFIX}\\/(\\d{${BUSINESS_DOC_LEVEL_LENGTH}})$`,
+    );
+    const match = normalized.match(regex);
+    if (!match) {
+      throw new BadRequestException(
+        `Format de livraison invalide. Attendu: ${DELIVERY_PREFIX}/${'0'.repeat(BUSINESS_DOC_LEVEL_LENGTH)}`,
+      );
+    }
+
+    return {
+      number: normalized,
+      level: Number(match[1]),
+    };
+  }
+
+  private async allocateNextReferenceLevel(tx: any) {
+    const sequence = await tx.documentSequence.upsert({
+      where: { scope: BUSINESS_DOC_SCOPE },
+      update: { nextValue: { increment: 1 } },
+      create: { scope: BUSINESS_DOC_SCOPE, nextValue: 2 },
+      select: { nextValue: true },
+    });
+
+    return sequence.nextValue - 1;
   }
 }

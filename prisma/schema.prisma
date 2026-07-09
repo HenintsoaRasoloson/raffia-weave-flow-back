@@ -588,6 +588,7 @@ model SalesOrderItem {
 model ProductionOrder {
   id               String            @id @default(cuid())
   orderNumber      String            @unique
+  referenceLevel   Int?
   salesOrderId     String?
   salesOrder       SalesOrder?       @relation(fields: [salesOrderId], references: [id])
   salesOrderItemId String?
@@ -607,6 +608,8 @@ model ProductionOrder {
   calendarEvents   CalendarEvent[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+
+  @@index([referenceLevel])
 }
 
 model ProductionStep {
@@ -628,6 +631,7 @@ model ProductionStep {
 model PurchaseOrder {
   id            String              @id @default(cuid())
   orderNumber   String              @unique
+  referenceLevel Int?
   supplierId    String
   supplier      Supplier            @relation(fields: [supplierId], references: [id])
   status        PurchaseOrderStatus @default(DRAFT)
@@ -642,6 +646,8 @@ model PurchaseOrder {
   notes         String?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
+
+  @@index([referenceLevel])
 }
 
 model PurchaseOrderItem {
@@ -661,6 +667,7 @@ model PurchaseOrderItem {
 model Delivery {
   id            String         @id @default(cuid())
   deliveryNumber String        @unique
+  referenceLevel Int?
   salesOrderId  String
   salesOrder    SalesOrder     @relation(fields: [salesOrderId], references: [id])
   clientId      String
@@ -674,6 +681,8 @@ model Delivery {
   calendarEvents CalendarEvent[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([referenceLevel])
 }
 
 model Invoice {

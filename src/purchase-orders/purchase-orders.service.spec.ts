@@ -9,6 +9,10 @@ import { PurchaseOrdersService } from './purchase-orders.service';
 describe('PurchaseOrdersService', () => {
   it('computes totalHt when creating a purchase order', async () => {
     const prisma = {
+      $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
+      documentSequence: {
+        upsert: jest.fn().mockResolvedValue({ nextValue: 2 }),
+      },
       purchaseOrder: {
         create: jest.fn().mockResolvedValue({ id: 'po-1' }),
       },
@@ -16,7 +20,6 @@ describe('PurchaseOrdersService', () => {
     const service = new PurchaseOrdersService(prisma);
 
     const dto = {
-      orderNumber: 'PO-001',
       supplierId: 'sup-1',
       orderDate: '2026-01-01T00:00:00.000Z',
       items: [
@@ -30,6 +33,8 @@ describe('PurchaseOrdersService', () => {
     expect(prisma.purchaseOrder.create).toHaveBeenCalled();
     const createArg = prisma.purchaseOrder.create.mock.calls[0][0];
     expect(createArg.data.totalHt).toBe(35);
+    expect(createArg.data.orderNumber).toBe('ACH/000001');
+    expect(createArg.data.referenceLevel).toBe(1);
   });
 
   it('throws when marking received on missing purchase order', async () => {

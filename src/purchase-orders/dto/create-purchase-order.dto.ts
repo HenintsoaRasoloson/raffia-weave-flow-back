@@ -4,9 +4,14 @@ import { IsArray, IsDateString, IsIn, IsOptional, IsString, ValidateNested } fro
 import { CreatePurchaseOrderItemDto } from './create-purchase-order-item.dto';
 
 export class CreatePurchaseOrderDto {
-  @ApiProperty()
+  @ApiPropertyOptional({
+    example: 'ACH/000188',
+    description:
+      'Reference bon d\'achat. Si absente, elle est generee automatiquement.',
+  })
+  @IsOptional()
   @IsString()
-  orderNumber!: string;
+  orderNumber?: string;
 
   @ApiProperty()
   @IsString()

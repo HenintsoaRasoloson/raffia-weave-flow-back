@@ -2,9 +2,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsIn, IsOptional, IsString } from 'class-validator';
 
 export class CreateDeliveryDto {
-  @ApiProperty({ example: 'LIV-2410-091' })
+  @ApiPropertyOptional({
+    example: 'LIV/000188',
+    description:
+      'Reference livraison. Si absente, elle est generee automatiquement.',
+  })
+  @IsOptional()
   @IsString()
-  deliveryNumber!: string;
+  deliveryNumber?: string;
 
   @ApiProperty({ example: 'clx-sales-order-id' })
   @IsString()

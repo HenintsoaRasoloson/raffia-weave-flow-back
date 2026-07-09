@@ -2,9 +2,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateProductionOrderDto {
-  @ApiProperty({ example: 'OF-2410-014' })
+  @ApiPropertyOptional({
+    example: 'OF/000188',
+    description:
+      'Reference ordre de fabrication. Si absente, elle est generee automatiquement.',
+  })
+  @IsOptional()
   @IsString()
-  orderNumber!: string;
+  orderNumber?: string;
 
   @ApiProperty({ example: 'clx-product-id' })
   @IsString()

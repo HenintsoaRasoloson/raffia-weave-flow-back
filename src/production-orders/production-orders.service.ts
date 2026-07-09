@@ -7,6 +7,10 @@ import { CreateProductionOrderDto } from './dto/create-production-order.dto';
 import { UpdateProductionProgressDto } from './dto/update-production-progress.dto';
 import { UpdateProductionOrderDto } from './dto/update-production-order.dto';
 
+const BUSINESS_DOC_SCOPE = 'business-documents';
+const BUSINESS_DOC_LEVEL_LENGTH = 6;
+const PRODUCTION_ORDER_PREFIX = 'OF';
+
 @Injectable()
 export class ProductionOrdersService {
   constructor(
@@ -60,16 +64,59 @@ export class ProductionOrdersService {
   }
 
   async create(dto: CreateProductionOrderDto, userId?: string) {
-    const payload: Record<string, unknown> = { ...dto };
-    if (dto.startDate) {
-      payload.startDate = new Date(dto.startDate);
-    }
-    if (dto.endDate) {
-      payload.endDate = new Date(dto.endDate);
-    }
+    const created = await this.prisma.$transaction(async (tx) => {
+      let linkedOrderLevel: number | null = null;
+      if (dto.salesOrderId) {
+        const salesOrder = await tx.salesOrder.findUnique({
+          where: { id: dto.salesOrderId },
+          select: { id: true, referenceLevel: true },
+        });
+        if (!salesOrder) {
+          throw new NotFoundException('Commande liee introuvable');
+        }
 
-    const created = await this.prisma.productionOrder.create({
-      data: payload as any,
+        linkedOrderLevel = salesOrder.referenceLevel;
+        if (linkedOrderLevel === null) {
+          linkedOrderLevel = await this.allocateNextReferenceLevel(tx as any);
+          await tx.salesOrder.update({
+            where: { id: salesOrder.id },
+            data: { referenceLevel: linkedOrderLevel },
+          });
+        }
+      }
+
+      let orderNumber: string;
+      let referenceLevel: number;
+      if (dto.orderNumber?.trim()) {
+        const parsed = this.parseProductionOrderNumber(dto.orderNumber);
+        if (linkedOrderLevel !== null && parsed.level !== linkedOrderLevel) {
+          throw new BadRequestException(
+            `Reference OF invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${linkedOrderLevel}`,
+          );
+        }
+        orderNumber = parsed.number;
+        referenceLevel = parsed.level;
+      } else {
+        referenceLevel =
+          linkedOrderLevel ?? (await this.allocateNextReferenceLevel(tx as any));
+        orderNumber = this.buildProductionOrderNumber(referenceLevel);
+      }
+
+      const payload: Record<string, unknown> = {
+        ...dto,
+        orderNumber,
+        referenceLevel,
+      };
+      if (dto.startDate) {
+        payload.startDate = new Date(dto.startDate);
+      }
+      if (dto.endDate) {
+        payload.endDate = new Date(dto.endDate);
+      }
+
+      return tx.productionOrder.create({
+        data: payload as any,
+      });
     });
 
     // Passer la commande client en IN_PRODUCTION automatiquement
@@ -87,7 +134,7 @@ export class ProductionOrdersService {
         action: 'PRODUCTION_ORDER_CREATED',
         userId,
         changes: {
-          orderNumber: { after: dto.orderNumber },
+          orderNumber: { after: created.orderNumber },
           quantity: { after: dto.quantity },
           status: { after: dto.status ?? 'PLANNED' },
         },
@@ -98,17 +145,48 @@ export class ProductionOrdersService {
   }
 
   update(id: string, dto: UpdateProductionOrderDto) {
-    const payload: Record<string, unknown> = { ...dto };
-    if (dto.startDate) {
-      payload.startDate = new Date(dto.startDate);
-    }
-    if (dto.endDate) {
-      payload.endDate = new Date(dto.endDate);
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.productionOrder.findUnique({
+        where: { id },
+        select: { id: true, salesOrderId: true },
+      });
+      if (!current) {
+        throw new NotFoundException('Ordre de fabrication introuvable');
+      }
 
-    return this.prisma.productionOrder.update({
-      where: { id },
-      data: payload as any,
+      const targetSalesOrderId = dto.salesOrderId ?? current.salesOrderId;
+      let linkedOrderLevel: number | null = null;
+      if (targetSalesOrderId) {
+        const salesOrder = await tx.salesOrder.findUnique({
+          where: { id: targetSalesOrderId },
+          select: { referenceLevel: true },
+        });
+        linkedOrderLevel = salesOrder?.referenceLevel ?? null;
+      }
+
+      const payload: Record<string, unknown> = { ...dto };
+      if (dto.orderNumber !== undefined) {
+        const parsed = this.parseProductionOrderNumber(dto.orderNumber);
+        if (linkedOrderLevel !== null && parsed.level !== linkedOrderLevel) {
+          throw new BadRequestException(
+            `Reference OF invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${linkedOrderLevel}`,
+          );
+        }
+        payload.orderNumber = parsed.number;
+        payload.referenceLevel = parsed.level;
+      }
+
+      if (dto.startDate) {
+        payload.startDate = new Date(dto.startDate);
+      }
+      if (dto.endDate) {
+        payload.endDate = new Date(dto.endDate);
+      }
+
+      return tx.productionOrder.update({
+        where: { id },
+        data: payload as any,
+      });
     });
   }
 
@@ -255,5 +333,40 @@ export class ProductionOrdersService {
       .catch((err) => console.error('Notification error:', err));
 
     return updated;
+  }
+
+  private buildProductionOrderNumber(level: number) {
+    return `${PRODUCTION_ORDER_PREFIX}/${level
+      .toString()
+      .padStart(BUSINESS_DOC_LEVEL_LENGTH, '0')}`;
+  }
+
+  private parseProductionOrderNumber(rawOrderNumber: string) {
+    const normalized = rawOrderNumber.trim().toUpperCase();
+    const regex = new RegExp(
+      `^${PRODUCTION_ORDER_PREFIX}\\/(\\d{${BUSINESS_DOC_LEVEL_LENGTH}})$`,
+    );
+    const match = normalized.match(regex);
+    if (!match) {
+      throw new BadRequestException(
+        `Format OF invalide. Attendu: ${PRODUCTION_ORDER_PREFIX}/${'0'.repeat(BUSINESS_DOC_LEVEL_LENGTH)}`,
+      );
+    }
+
+    return {
+      number: normalized,
+      level: Number(match[1]),
+    };
+  }
+
+  private async allocateNextReferenceLevel(tx: any) {
+    const sequence = await tx.documentSequence.upsert({
+      where: { scope: BUSINESS_DOC_SCOPE },
+      update: { nextValue: { increment: 1 } },
+      create: { scope: BUSINESS_DOC_SCOPE, nextValue: 2 },
+      select: { nextValue: true },
+    });
+
+    return sequence.nextValue - 1;
   }
 }
