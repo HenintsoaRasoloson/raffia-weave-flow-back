@@ -279,6 +279,7 @@ model Category {
   name      String
   code      String?   @unique
   refSequenceLength Int @default(6)
+  refNextSequence  Int @default(1)
   slug      String    @unique
   products  Product[]
   createdAt DateTime  @default(now())

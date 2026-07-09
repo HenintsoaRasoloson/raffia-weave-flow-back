@@ -342,6 +342,7 @@ export class ProductsService {
           slug: true,
           name: true,
           refSequenceLength: true,
+          refNextSequence: true,
         },
       });
 
@@ -351,7 +352,7 @@ export class ProductsService {
 
       const nextRef = dto.ref?.trim()
         ? dto.ref.trim().toUpperCase()
-        : await this.generateUniqueProductRef(tx as any, category);
+        : await this.generateNextSequentialProductRef(tx as any, category);
 
       this.assertRefMatchesCategory(nextRef, category);
 
@@ -405,6 +406,7 @@ export class ProductsService {
           slug: true,
           name: true,
           refSequenceLength: true,
+          refNextSequence: true,
         },
       });
 
@@ -540,21 +542,36 @@ export class ProductsService {
     return (base.slice(0, 3) || 'CAT').toUpperCase();
   }
 
-  private async generateUniqueProductRef(
+  private async generateNextSequentialProductRef(
     tx: any,
     category: {
+      id: string;
       code: string | null;
       slug: string;
       name: string;
       refSequenceLength: number;
+      refNextSequence: number;
     },
   ) {
     const prefix = this.getCategoryRefPrefix(category);
     const length = this.normalizeRefSequenceLength(category.refSequenceLength);
 
-    for (let i = 0; i < 10; i++) {
-      const randomPart = this.generateNumericSuffix(length);
-      const candidate = `${prefix}/${randomPart}`;
+    for (let i = 0; i < 50; i++) {
+      const updatedCategory = await tx.category.update({
+        where: { id: category.id },
+        data: { refNextSequence: { increment: 1 } },
+        select: { refNextSequence: true },
+      });
+
+      const sequenceNumber = updatedCategory.refNextSequence - 1;
+      const suffix = sequenceNumber.toString().padStart(length, '0');
+      if (suffix.length > length) {
+        throw new BadRequestException(
+          `Reference automatique impossible: la sequence depasse ${length} chiffres. Augmente refSequenceLength sur la categorie.`,
+        );
+      }
+
+      const candidate = `${prefix}/${suffix}`;
 
       const existing = await tx.product.findUnique({
         where: { ref: candidate },
@@ -567,7 +584,7 @@ export class ProductsService {
     }
 
     throw new BadRequestException(
-      'Impossible de generer une reference unique. Veuillez reessayer.',
+      'Impossible de generer une reference sequentielle unique. Veuillez reessayer.',
     );
   }
 
@@ -583,11 +600,4 @@ export class ProductsService {
     return Math.min(12, Math.max(1, Math.trunc(length)));
   }
 
-  private generateNumericSuffix(length: number) {
-    let digits = '';
-    for (let i = 0; i < length; i++) {
-      digits += Math.floor(Math.random() * 10).toString();
-    }
-    return digits;
-  }
 }
