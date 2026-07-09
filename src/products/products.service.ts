@@ -26,6 +26,7 @@ export class ProductsService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const includeVariants = query.includeVariants ?? false;
+    const compactFields = query.fields === 'compact';
     const where = {
       ...(query.status ? { status: query.status as any } : {}),
       ...(query.q
@@ -39,17 +40,32 @@ export class ProductsService {
     };
 
     return this.prisma.$transaction(async (tx) => {
+      const baseQuery = {
+        where,
+        orderBy: { createdAt: 'desc' as const },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      };
+
       const [items, total] = await Promise.all([
-        tx.product.findMany({
-          where,
-          include: {
-            category: true,
-            ...(includeVariants ? { variants: true } : {}),
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
+        compactFields
+          ? tx.product.findMany({
+              ...baseQuery,
+              select: {
+                id: true,
+                ref: true,
+                name: true,
+                status: true,
+                basePrice: true,
+              },
+            })
+          : tx.product.findMany({
+              ...baseQuery,
+              include: {
+                category: true,
+                ...(includeVariants ? { variants: true } : {}),
+              },
+            }),
         tx.product.count({ where }),
       ]);
 

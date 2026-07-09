@@ -1,6 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class ListQueryDto {
   @ApiPropertyOptional({ default: 1, minimum: 1 })
@@ -41,4 +49,15 @@ export class ListQueryDto {
   @Type(() => Boolean)
   @IsBoolean()
   includeVariants?: boolean = false;
+
+  @ApiPropertyOptional({
+    description:
+      'Niveau de detail des lignes retournees. compact = payload minimum, full = payload complet.',
+    enum: ['compact', 'full'],
+    default: 'full',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['compact', 'full'])
+  fields?: 'compact' | 'full' = 'full';
 }

@@ -50,7 +50,7 @@ export class ProductsController {
   @ApiOperation({
     summary: 'Lister les produits',
     description:
-      'Par defaut, la liste est allegee (sans variantes). Ajoutez includeVariants=true pour inclure les variantes.',
+      'Par defaut, la liste est allegee (sans variantes). Ajoutez includeVariants=true pour inclure les variantes. Ajoutez fields=compact pour un payload minimum (id, ref, nom, statut, prix).',
   })
   @ApiPaginatedResponse(ProductResponseDto, 'Liste paginee des produits')
   findAll(@Query() query: ListQueryDto) {
