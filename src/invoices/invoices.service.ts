@@ -1,13 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../common/audit.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
@@ -48,7 +52,7 @@ export class InvoicesService {
     });
   }
 
-  async create(dto: CreateInvoiceDto) {
+  async create(dto: CreateInvoiceDto, userId?: string) {
     const items = dto.items ?? [];
     const subtotalHt = items.reduce(
       (sum, item) => sum + item.quantity * item.unitPriceHt,
@@ -61,7 +65,7 @@ export class InvoicesService {
     }, 0);
     const totalTtc = subtotalHt + taxAmount;
 
-    return this.prisma.invoice.create({
+    const created = await this.prisma.invoice.create({
       data: {
         invoiceNumber: dto.invoiceNumber,
         type: dto.type as any,
@@ -93,6 +97,22 @@ export class InvoicesService {
       } as any,
       include: { items: true, client: true },
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'Invoice',
+        entityId: created.id,
+        action: 'INVOICE_CREATED',
+        userId,
+        changes: {
+          invoiceNumber: { after: dto.invoiceNumber },
+          type: { after: dto.type },
+          totalTtc: { after: totalTtc },
+        },
+      });
+    }
+
+    return created;
   }
 
   update(id: string, dto: UpdateInvoiceDto) {
@@ -144,7 +164,53 @@ export class InvoicesService {
     });
   }
 
-  async recordPayment(id: string, dto: RecordPaymentDto) {
+  async markPaidWithAudit(id: string, userId?: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      select: { status: true, type: true, totalTtc: true },
+    });
+    if (!invoice) {
+      throw new NotFoundException('Facture introuvable');
+    }
+
+    const current = invoice.status as unknown as string;
+    if (current === 'PAID') {
+      throw new BadRequestException('La facture est deja payee');
+    }
+    if (current === 'CANCELLED' || current === 'DRAFT') {
+      throw new BadRequestException(
+        `Transition invalide: ${current} -> PAID`,
+      );
+    }
+    if (invoice.type === 'CREDIT_NOTE') {
+      throw new BadRequestException(
+        'Un avoir ne peut pas etre marque comme paye',
+      );
+    }
+
+    const updated = await this.prisma.invoice.update({
+      where: { id },
+      data: {
+        status: 'PAID',
+        paidAt: new Date(),
+        paidAmount: invoice.totalTtc,
+      } as any,
+    });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'Invoice',
+        entityId: id,
+        action: 'INVOICE_MARKED_PAID',
+        userId,
+        changes: { status: { before: current, after: 'PAID' } },
+      });
+    }
+
+    return updated;
+  }
+
+  async recordPayment(id: string, dto: RecordPaymentDto, userId?: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       select: { status: true, type: true, totalTtc: true, paidAmount: true },
@@ -185,7 +251,7 @@ export class InvoicesService {
         },
       });
 
-      return tx.invoice.update({
+      const updated = await tx.invoice.update({
         where: { id },
         data: {
           paidAmount: newPaidAmount,
@@ -194,6 +260,23 @@ export class InvoicesService {
         } as any,
         include: { items: true, client: true, payments: true },
       });
+
+      if (userId) {
+        // Log AFTER transaction
+        await this.auditService.log({
+          entityType: 'Invoice',
+          entityId: id,
+          action: 'INVOICE_PAYMENT_RECORDED',
+          userId,
+          changes: {
+            paidAmount: { before: alreadyPaid, after: newPaidAmount },
+            paymentMethod: { after: dto.paymentMethod },
+          },
+          details: `${dto.amount} ${invoice.currency ?? 'EUR'} par ${dto.paymentMethod}`,
+        });
+      }
+
+      return updated;
     });
   }
 

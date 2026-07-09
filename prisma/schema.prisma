@@ -157,6 +157,29 @@ enum UserRole {
   RESPONSABLE_FINANCIER_STOCKS
 }
 
+// Actions auditables : qui a fait quoi, quand, et sur quelle entité
+enum AuditAction {
+  // Commandes
+  SALES_ORDER_CREATED
+  SALES_ORDER_STATUS_CHANGED
+  SALES_ORDER_BAT_SENT
+  SALES_ORDER_BAT_APPROVED
+  // Factures
+  INVOICE_CREATED
+  INVOICE_PAYMENT_RECORDED
+  INVOICE_MARKED_PAID
+  // Production
+  PRODUCTION_ORDER_CREATED
+  PRODUCTION_ORDER_PROGRESS_UPDATED
+  PRODUCTION_ORDER_QUALITY_APPROVED
+  // Achats
+  PURCHASE_ORDER_CREATED
+  PURCHASE_ORDER_STATUS_CHANGED
+  // Livraisons
+  DELIVERY_CREATED
+  DELIVERY_MARKED_DELIVERED
+}
+
 model User {
   id                  String    @id @default(cuid())
   email               String    @unique
@@ -167,8 +190,27 @@ model User {
   refreshTokenHash    String?
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
+  auditLogs           AuditLog[]
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+}
+
+// Journal d'audit : enregistre chaque action sur les entités critiques.
+// Permet de tracer qui a créé/modifié quoi et quand.
+model AuditLog {
+  id          String       @id @default(cuid())
+  entityType  String       // ex: SalesOrder, Invoice, ProductionOrder
+  entityId    String       // l'ID de l'entité
+  action      AuditAction
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  changes     Json?        // {before: {...}, after: {...}} les champs modifiés
+  details     String?      // description libre (raison, référence, etc.)
+  createdAt   DateTime     @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model CompanySetting {

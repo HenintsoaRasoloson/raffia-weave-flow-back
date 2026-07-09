@@ -1,13 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../common/audit.service';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
 import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
 
 @Injectable()
 export class SalesOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
@@ -54,7 +58,7 @@ export class SalesOrdersService {
     });
   }
 
-  async create(dto: CreateSalesOrderDto) {
+  async create(dto: CreateSalesOrderDto, userId?: string) {
     const taxRate = dto.taxRate ?? 20;
     const items = dto.items ?? [];
     const totalHt = items.reduce(
@@ -63,7 +67,7 @@ export class SalesOrdersService {
     );
     const totalTtc = totalHt * (1 + taxRate / 100);
 
-    return this.prisma.salesOrder.create({
+    const created = await this.prisma.salesOrder.create({
       data: {
         orderNumber: dto.orderNumber,
         clientId: dto.clientId,
@@ -92,6 +96,22 @@ export class SalesOrdersService {
       } as any,
       include: { items: true, client: true },
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'SalesOrder',
+        entityId: created.id,
+        action: 'SALES_ORDER_CREATED',
+        userId,
+        changes: {
+          orderNumber: { after: dto.orderNumber },
+          status: { after: dto.status ?? 'TO_PROCESS' },
+          totalTtc: { after: totalTtc },
+        },
+      });
+    }
+
+    return created;
   }
 
   update(id: string, dto: UpdateSalesOrderDto) {
@@ -106,7 +126,7 @@ export class SalesOrdersService {
     });
   }
 
-  async updateStatus(id: string, dto: UpdateSalesOrderStatusDto) {
+  async updateStatus(id: string, dto: UpdateSalesOrderStatusDto, userId?: string) {
     const order = await this.prisma.salesOrder.findUnique({
       where: { id },
       select: { status: true, batRequired: true, batApprovedAt: true },
@@ -141,13 +161,25 @@ export class SalesOrdersService {
       );
     }
 
-    return this.prisma.salesOrder.update({
+    const updated = await this.prisma.salesOrder.update({
       where: { id },
       data: { status: next as any },
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'SalesOrder',
+        entityId: id,
+        action: 'SALES_ORDER_STATUS_CHANGED',
+        userId,
+        changes: { status: { before: current, after: next } },
+      });
+    }
+
+    return updated;
   }
 
-  async sendBat(id: string) {
+  async sendBat(id: string, userId?: string) {
     const order = await this.prisma.salesOrder.findUnique({
       where: { id },
       select: { batRequired: true, batSentAt: true },
@@ -158,13 +190,24 @@ export class SalesOrdersService {
         'Cette commande ne nécessite pas de BAT (batRequired = false).',
       );
     }
-    return this.prisma.salesOrder.update({
+    const updated = await this.prisma.salesOrder.update({
       where: { id },
       data: { batSentAt: new Date() } as any,
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'SalesOrder',
+        entityId: id,
+        action: 'SALES_ORDER_BAT_SENT',
+        userId,
+      });
+    }
+
+    return updated;
   }
 
-  async approveBat(id: string) {
+  async approveBat(id: string, userId?: string) {
     const order = await this.prisma.salesOrder.findUnique({
       where: { id },
       select: { batRequired: true, batSentAt: true, batApprovedAt: true },
@@ -183,10 +226,21 @@ export class SalesOrdersService {
     if (order.batApprovedAt) {
       throw new BadRequestException('Le BAT a déjà été approuvé.');
     }
-    return this.prisma.salesOrder.update({
+    const updated = await this.prisma.salesOrder.update({
       where: { id },
       data: { batApprovedAt: new Date() } as any,
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'SalesOrder',
+        entityId: id,
+        action: 'SALES_ORDER_BAT_APPROVED',
+        userId,
+      });
+    }
+
+    return updated;
   }
 
   remove(id: string) {

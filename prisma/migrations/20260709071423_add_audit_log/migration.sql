@@ -1,0 +1,28 @@
+-- CreateEnum
+CREATE TYPE "AuditAction" AS ENUM ('SALES_ORDER_CREATED', 'SALES_ORDER_STATUS_CHANGED', 'SALES_ORDER_BAT_SENT', 'SALES_ORDER_BAT_APPROVED', 'INVOICE_CREATED', 'INVOICE_PAYMENT_RECORDED', 'INVOICE_MARKED_PAID', 'PRODUCTION_ORDER_CREATED', 'PRODUCTION_ORDER_PROGRESS_UPDATED', 'PRODUCTION_ORDER_QUALITY_APPROVED', 'PURCHASE_ORDER_CREATED', 'PURCHASE_ORDER_STATUS_CHANGED', 'DELIVERY_CREATED', 'DELIVERY_MARKED_DELIVERED');
+
+-- CreateTable
+CREATE TABLE "AuditLog" (
+    "id" TEXT NOT NULL,
+    "entityType" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "action" "AuditAction" NOT NULL,
+    "userId" TEXT NOT NULL,
+    "changes" JSONB,
+    "details" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "AuditLog_entityType_entityId_idx" ON "AuditLog"("entityType", "entityId");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_userId_idx" ON "AuditLog"("userId");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

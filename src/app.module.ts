@@ -14,6 +14,8 @@ import { ProductsModule } from './products/products.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { SalesOrdersModule } from './sales-orders/sales-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
+import { AuditService } from './common/audit.service';
+import { AuditController } from './common/audit.controller';
 
 @Module({
   imports: [
@@ -31,7 +33,7 @@ import { SuppliersModule } from './suppliers/suppliers.module';
     DeliveriesModule,
     InvoicesModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [AppController, AuditController],
+  providers: [AppService, AuditService],
 })
 export class AppModule {}

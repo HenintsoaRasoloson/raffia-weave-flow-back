@@ -1,13 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../common/audit.service';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
 import { UpdateProductionProgressDto } from './dto/update-production-progress.dto';
 import { UpdateProductionOrderDto } from './dto/update-production-order.dto';
 
 @Injectable()
 export class ProductionOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
@@ -53,7 +57,7 @@ export class ProductionOrdersService {
     });
   }
 
-  create(dto: CreateProductionOrderDto) {
+  create(dto: CreateProductionOrderDto, userId?: string) {
     const payload: Record<string, unknown> = { ...dto };
     if (dto.startDate) {
       payload.startDate = new Date(dto.startDate);
@@ -62,9 +66,27 @@ export class ProductionOrdersService {
       payload.endDate = new Date(dto.endDate);
     }
 
-    return this.prisma.productionOrder.create({
+    const created = this.prisma.productionOrder.create({
       data: payload as any,
     });
+
+    if (userId) {
+      created.then((order) => {
+        this.auditService.log({
+          entityType: 'ProductionOrder',
+          entityId: order.id,
+          action: 'PRODUCTION_ORDER_CREATED',
+          userId,
+          changes: {
+            orderNumber: { after: dto.orderNumber },
+            quantity: { after: dto.quantity },
+            status: { after: dto.status ?? 'PLANNED' },
+          },
+        });
+      });
+    }
+
+    return created;
   }
 
   update(id: string, dto: UpdateProductionOrderDto) {
@@ -170,7 +192,7 @@ export class ProductionOrdersService {
     };
   }
 
-  async approveQuality(id: string) {
+  async approveQuality(id: string, userId?: string) {
     const order = await this.prisma.productionOrder.findUnique({
       where: { id },
       select: { status: true, qualityApproved: true },
@@ -186,9 +208,21 @@ export class ProductionOrdersService {
     if (order.qualityApproved) {
       throw new BadRequestException('Cet OF a déjà été validé en qualité');
     }
-    return this.prisma.productionOrder.update({
+    const updated = await this.prisma.productionOrder.update({
       where: { id },
       data: { qualityApproved: true } as any,
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'ProductionOrder',
+        entityId: id,
+        action: 'PRODUCTION_ORDER_QUALITY_APPROVED',
+        userId,
+        changes: { qualityApproved: { before: false, after: true } },
+      });
+    }
+
+    return updated;
   }
 }

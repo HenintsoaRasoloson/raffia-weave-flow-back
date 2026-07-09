@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAccessPayload } from '../auth/auth.types';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
@@ -40,8 +42,11 @@ export class ProductionOrdersController {
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Créer un ordre de fabrication' })
   @ApiCreatedResponse({ description: 'OF créé', type: ProductionOrderResponseDto })
-  create(@Body() dto: CreateProductionOrderDto) {
-    return this.productionOrdersService.create(dto);
+  create(
+    @Body() dto: CreateProductionOrderDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.productionOrdersService.create(dto, user.sub);
   }
 
   @Patch(':id')
@@ -94,7 +99,10 @@ export class ProductionOrdersController {
       'Marque l\'OF comme conforme après contrôle. Prérequis : statut COMPLETED.',
   })
   @ApiOkResponse({ description: 'OF validé qualité', type: ProductionOrderResponseDto })
-  approveQuality(@Param('id') id: string) {
-    return this.productionOrdersService.approveQuality(id);
+  approveQuality(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.productionOrdersService.approveQuality(id, user.sub);
   }
 }

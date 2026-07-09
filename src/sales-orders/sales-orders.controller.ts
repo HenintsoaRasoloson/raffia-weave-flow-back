@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAccessPayload } from '../auth/auth.types';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
@@ -35,8 +37,11 @@ export class SalesOrdersController {
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Créer une commande' })
   @ApiCreatedResponse({ description: 'Commande créée', type: SalesOrderResponseDto })
-  create(@Body() dto: CreateSalesOrderDto) {
-    return this.salesOrdersService.create(dto);
+  create(
+    @Body() dto: CreateSalesOrderDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.salesOrdersService.create(dto, user.sub);
   }
 
   @Patch(':id')
@@ -54,8 +59,12 @@ export class SalesOrdersController {
     description: 'Statut commande mis à jour',
     type: SalesOrderResponseDto,
   })
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateSalesOrderStatusDto) {
-    return this.salesOrdersService.updateStatus(id, dto);
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateSalesOrderStatusDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.salesOrdersService.updateStatus(id, dto, user.sub);
   }
 
   @Patch(':id/bat-send')
@@ -67,8 +76,11 @@ export class SalesOrdersController {
       'Nécessite batRequired = true sur la commande.',
   })
   @ApiOkResponse({ description: 'BAT marqué envoyé', type: SalesOrderResponseDto })
-  sendBat(@Param('id') id: string) {
-    return this.salesOrdersService.sendBat(id);
+  sendBat(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.salesOrdersService.sendBat(id, user.sub);
   }
 
   @Patch(':id/bat-approve')
@@ -80,8 +92,11 @@ export class SalesOrdersController {
       'Débloque ensuite le passage en statut IN_PRODUCTION.',
   })
   @ApiOkResponse({ description: 'BAT approuvé', type: SalesOrderResponseDto })
-  approveBat(@Param('id') id: string) {
-    return this.salesOrdersService.approveBat(id);
+  approveBat(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.salesOrdersService.approveBat(id, user.sub);
   }
 
   @Delete(':id')
