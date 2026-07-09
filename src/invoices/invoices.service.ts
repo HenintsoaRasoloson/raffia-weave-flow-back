@@ -16,6 +16,8 @@ import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 
 const INVOICE_TYPES = ['PROFORMA', 'DEPOSIT', 'INTERMEDIATE', 'FINAL', 'CREDIT_NOTE'] as const;
+const BUSINESS_DOC_SCOPE = 'business-documents';
+const BUSINESS_DOC_LEVEL_LENGTH = 6;
 
 @Injectable()
 export class InvoicesService {
@@ -277,6 +279,7 @@ export class InvoicesService {
   }
 
   async create(dto: CreateInvoiceDto, userId?: string) {
+    const normalizedType = this.normalizeInvoiceType(dto.type);
     const items = dto.items ?? [];
     const subtotalHt = items.reduce(
       (sum, item) => sum + item.quantity * item.unitPriceHt,
@@ -289,37 +292,77 @@ export class InvoicesService {
     }, 0);
     const totalTtc = subtotalHt + taxAmount;
 
-    const created = await this.prisma.invoice.create({
-      data: {
-        invoiceNumber: dto.invoiceNumber,
-        type: dto.type as any,
-        status: (dto.status ?? 'ISSUED') as any,
-        clientId: dto.clientId,
-        salesOrderId: dto.salesOrderId,
-        issueDate: new Date(dto.issueDate),
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-        subtotalHt,
-        taxAmount,
-        totalTtc,
-        currency: dto.currency ?? 'EUR',
-        notes: dto.notes,
-        items: {
-          create: items.map((item) => {
-            const lineTotalHt = item.quantity * item.unitPriceHt;
-            return {
-              description: item.description,
-              quantity: item.quantity,
-              unitPriceHt: item.unitPriceHt,
-              taxRate: item.taxRate ?? 20,
-              lineTotalHt,
-              salesOrderItemId: item.salesOrderItemId,
-              productId: item.productId,
-              variantId: item.variantId,
-            };
-          }),
-        },
-      } as any,
-      include: { items: true, client: true },
+    const created = await this.prisma.$transaction(async (tx) => {
+      let referenceLevel: number | null = null;
+
+      if (dto.salesOrderId) {
+        const salesOrder = await tx.salesOrder.findUnique({
+          where: { id: dto.salesOrderId },
+          select: { id: true, referenceLevel: true },
+        });
+        if (!salesOrder) {
+          throw new NotFoundException('Commande liee introuvable');
+        }
+
+        referenceLevel = salesOrder.referenceLevel;
+        if (referenceLevel === null) {
+          referenceLevel = await this.allocateNextReferenceLevel(tx as any);
+          await tx.salesOrder.update({
+            where: { id: salesOrder.id },
+            data: { referenceLevel },
+          });
+        }
+      }
+
+      let invoiceNumber: string;
+      if (dto.invoiceNumber?.trim()) {
+        const parsed = this.parseInvoiceNumber(dto.invoiceNumber, normalizedType);
+        if (referenceLevel !== null && parsed.level !== referenceLevel) {
+          throw new BadRequestException(
+            `Reference facture invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${referenceLevel}`,
+          );
+        }
+
+        referenceLevel = referenceLevel ?? parsed.level;
+        invoiceNumber = parsed.number;
+      } else {
+        referenceLevel = referenceLevel ?? (await this.allocateNextReferenceLevel(tx as any));
+        invoiceNumber = this.buildInvoiceNumber(referenceLevel, normalizedType);
+      }
+
+      return tx.invoice.create({
+        data: {
+          invoiceNumber,
+          referenceLevel,
+          type: normalizedType as any,
+          status: (dto.status ?? 'ISSUED') as any,
+          clientId: dto.clientId,
+          salesOrderId: dto.salesOrderId,
+          issueDate: new Date(dto.issueDate),
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+          subtotalHt,
+          taxAmount,
+          totalTtc,
+          currency: dto.currency ?? 'EUR',
+          notes: dto.notes,
+          items: {
+            create: items.map((item) => {
+              const lineTotalHt = item.quantity * item.unitPriceHt;
+              return {
+                description: item.description,
+                quantity: item.quantity,
+                unitPriceHt: item.unitPriceHt,
+                taxRate: item.taxRate ?? 20,
+                lineTotalHt,
+                salesOrderItemId: item.salesOrderItemId,
+                productId: item.productId,
+                variantId: item.variantId,
+              };
+            }),
+          },
+        } as any,
+        include: { items: true, client: true },
+      });
     });
 
     if (userId) {
@@ -329,15 +372,15 @@ export class InvoicesService {
         action: 'INVOICE_CREATED',
         userId,
         changes: {
-          invoiceNumber: { after: dto.invoiceNumber },
-          type: { after: dto.type },
+          invoiceNumber: { after: created.invoiceNumber },
+          type: { after: created.type },
           totalTtc: { after: totalTtc },
         },
       });
     }
 
     // Quand la proforma est créée, notifier le resp général pour qu'il l'envoie au client
-    if (dto.type === 'PROFORMA') {
+    if (normalizedType === 'PROFORMA') {
       this.notificationsService.notifyRole('RESPONSABLE_GENERAL', {
         type: 'proforma_ready',
         title: '📄 Proforma prête à envoyer',
@@ -357,17 +400,67 @@ export class InvoicesService {
   }
 
   update(id: string, dto: UpdateInvoiceDto) {
-    const payload: Record<string, unknown> = { ...dto };
-    if (dto.issueDate) {
-      payload.issueDate = new Date(dto.issueDate);
-    }
-    if (dto.dueDate) {
-      payload.dueDate = new Date(dto.dueDate);
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.invoice.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          type: true,
+          referenceLevel: true,
+          salesOrderId: true,
+        },
+      });
+      if (!current) {
+        throw new NotFoundException('Facture introuvable');
+      }
 
-    return this.prisma.invoice.update({
-      where: { id },
-      data: payload as any,
+      const targetType = dto.type
+        ? this.normalizeInvoiceType(dto.type)
+        : (current.type as (typeof INVOICE_TYPES)[number]);
+      const targetSalesOrderId = dto.salesOrderId ?? current.salesOrderId ?? null;
+
+      const payload: Record<string, unknown> = { ...dto, type: targetType };
+      if (dto.issueDate) {
+        payload.issueDate = new Date(dto.issueDate);
+      }
+      if (dto.dueDate) {
+        payload.dueDate = new Date(dto.dueDate);
+      }
+
+      let linkedOrderLevel: number | null = null;
+      if (targetSalesOrderId) {
+        const salesOrder = await tx.salesOrder.findUnique({
+          where: { id: targetSalesOrderId },
+          select: { id: true, referenceLevel: true },
+        });
+        if (!salesOrder) {
+          throw new NotFoundException('Commande liee introuvable');
+        }
+
+        linkedOrderLevel = salesOrder.referenceLevel;
+      }
+
+      if (dto.invoiceNumber !== undefined) {
+        const parsed = this.parseInvoiceNumber(dto.invoiceNumber, targetType);
+        if (linkedOrderLevel !== null && parsed.level !== linkedOrderLevel) {
+          throw new BadRequestException(
+            `Reference facture invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${linkedOrderLevel}`,
+          );
+        }
+        payload.invoiceNumber = parsed.number;
+        payload.referenceLevel = parsed.level;
+      } else if (dto.type !== undefined && current.referenceLevel !== null) {
+        // If type changes, keep level and just switch prefix.
+        payload.invoiceNumber = this.buildInvoiceNumber(
+          current.referenceLevel,
+          targetType,
+        );
+      }
+
+      return tx.invoice.update({
+        where: { id },
+        data: payload as any,
+      });
     });
   }
 
@@ -582,6 +675,61 @@ export class InvoicesService {
     }
 
     return normalized as (typeof INVOICE_TYPES)[number];
+  }
+
+  private getInvoicePrefix(type: (typeof INVOICE_TYPES)[number]) {
+    const map: Record<(typeof INVOICE_TYPES)[number], string> = {
+      PROFORMA: 'PRO',
+      DEPOSIT: 'ACO',
+      INTERMEDIATE: 'INT',
+      FINAL: 'FAC',
+      CREDIT_NOTE: 'AVO',
+    };
+
+    return map[type];
+  }
+
+  private buildInvoiceNumber(
+    level: number,
+    type: (typeof INVOICE_TYPES)[number],
+  ) {
+    const prefix = this.getInvoicePrefix(type);
+    return `${prefix}/${level
+      .toString()
+      .padStart(BUSINESS_DOC_LEVEL_LENGTH, '0')}`;
+  }
+
+  private parseInvoiceNumber(
+    rawInvoiceNumber: string,
+    type: (typeof INVOICE_TYPES)[number],
+  ) {
+    const normalized = rawInvoiceNumber.trim().toUpperCase();
+    const prefix = this.getInvoicePrefix(type);
+    const regex = new RegExp(
+      `^${prefix}\\/(\\d{${BUSINESS_DOC_LEVEL_LENGTH}})$`,
+    );
+    const match = normalized.match(regex);
+    if (!match) {
+      throw new BadRequestException(
+        `Format facture invalide pour ${type}. Attendu: ${prefix}/${'0'.repeat(BUSINESS_DOC_LEVEL_LENGTH)}`,
+      );
+    }
+
+    return {
+      number: normalized,
+      level: Number(match[1]),
+    };
+  }
+
+  private async allocateNextReferenceLevel(tx: any) {
+    const sequence = await tx.documentSequence.upsert({
+      where: { scope: BUSINESS_DOC_SCOPE },
+      update: { nextValue: { increment: 1 } },
+      create: { scope: BUSINESS_DOC_SCOPE, nextValue: 2 },
+      select: { nextValue: true },
+    });
+
+    return sequence.nextValue - 1;
   }
 
   private async ensureInvoiceExists(invoiceId: string) {

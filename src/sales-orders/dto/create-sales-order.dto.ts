@@ -45,9 +45,14 @@ export class CreateSalesOrderItemDto {
 }
 
 export class CreateSalesOrderDto {
-  @ApiProperty({ example: 'CMD-2410-0188' })
+  @ApiPropertyOptional({
+    example: 'CMD/000188',
+    description:
+      'Reference commande. Si absente, elle est generee automatiquement.',
+  })
+  @IsOptional()
   @IsString()
-  orderNumber!: string;
+  orderNumber?: string;
 
   @ApiProperty({ example: 'clx-client-id' })
   @IsString()

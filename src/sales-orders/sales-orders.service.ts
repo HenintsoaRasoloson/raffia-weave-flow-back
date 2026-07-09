@@ -14,6 +14,10 @@ import { UploadBatDocumentDto } from './dto/upload-bat-document.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
 import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
 
+const BUSINESS_DOC_SCOPE = 'business-documents';
+const SALES_ORDER_PREFIX = 'CMD';
+const BUSINESS_DOC_LEVEL_LENGTH = 6;
+
 @Injectable()
 export class SalesOrdersService {
   constructor(
@@ -245,34 +249,49 @@ export class SalesOrdersService {
     );
     const totalTtc = totalHt * (1 + taxRate / 100);
 
-    const created = await this.prisma.salesOrder.create({
-      data: {
-        orderNumber: dto.orderNumber,
-        clientId: dto.clientId,
-        orderType: dto.orderType as any,
-        status: (dto.status ?? 'TO_PROCESS') as any,
-        orderDate: new Date(dto.orderDate),
-        taxRate,
-        totalHt,
-        totalTtc,
-        currency: dto.currency ?? 'EUR',
-        notes: dto.notes,
-        items: {
-          create: items.map((item) => {
-            const lineTotalHt = item.quantity * item.unitPriceHt;
-            return {
-              description: item.description,
-              quantity: item.quantity,
-              unitPriceHt: item.unitPriceHt,
-              taxRate: item.taxRate ?? taxRate,
-              lineTotalHt,
-              productId: item.productId,
-              variantId: item.variantId,
-            };
-          }),
-        },
-      } as any,
-      include: { items: true, client: true },
+    const created = await this.prisma.$transaction(async (tx) => {
+      let referenceLevel: number;
+      let orderNumber: string;
+
+      if (dto.orderNumber?.trim()) {
+        const parsed = this.parseSalesOrderNumber(dto.orderNumber);
+        referenceLevel = parsed.level;
+        orderNumber = parsed.number;
+      } else {
+        referenceLevel = await this.allocateNextReferenceLevel(tx as any);
+        orderNumber = this.buildSalesOrderNumber(referenceLevel);
+      }
+
+      return tx.salesOrder.create({
+        data: {
+          orderNumber,
+          referenceLevel,
+          clientId: dto.clientId,
+          orderType: dto.orderType as any,
+          status: (dto.status ?? 'TO_PROCESS') as any,
+          orderDate: new Date(dto.orderDate),
+          taxRate,
+          totalHt,
+          totalTtc,
+          currency: dto.currency ?? 'EUR',
+          notes: dto.notes,
+          items: {
+            create: items.map((item) => {
+              const lineTotalHt = item.quantity * item.unitPriceHt;
+              return {
+                description: item.description,
+                quantity: item.quantity,
+                unitPriceHt: item.unitPriceHt,
+                taxRate: item.taxRate ?? taxRate,
+                lineTotalHt,
+                productId: item.productId,
+                variantId: item.variantId,
+              };
+            }),
+          },
+        } as any,
+        include: { items: true, client: true },
+      });
     });
 
     if (userId) {
@@ -282,7 +301,7 @@ export class SalesOrdersService {
         action: 'SALES_ORDER_CREATED',
         userId,
         changes: {
-          orderNumber: { after: dto.orderNumber },
+          orderNumber: { after: created.orderNumber },
           status: { after: dto.status ?? 'TO_PROCESS' },
           totalTtc: { after: totalTtc },
         },
@@ -312,6 +331,11 @@ export class SalesOrdersService {
 
   update(id: string, dto: UpdateSalesOrderDto) {
     const payload: Record<string, unknown> = { ...dto };
+    if (dto.orderNumber !== undefined) {
+      const parsed = this.parseSalesOrderNumber(dto.orderNumber);
+      payload.orderNumber = parsed.number;
+      payload.referenceLevel = parsed.level;
+    }
     if (dto.orderDate) {
       payload.orderDate = new Date(dto.orderDate);
     }
@@ -451,6 +475,41 @@ export class SalesOrdersService {
     if (!order) {
       throw new NotFoundException('Commande introuvable');
     }
+  }
+
+  private buildSalesOrderNumber(level: number) {
+    return `${SALES_ORDER_PREFIX}/${level
+      .toString()
+      .padStart(BUSINESS_DOC_LEVEL_LENGTH, '0')}`;
+  }
+
+  private parseSalesOrderNumber(rawOrderNumber: string) {
+    const normalized = rawOrderNumber.trim().toUpperCase();
+    const regex = new RegExp(
+      `^${SALES_ORDER_PREFIX}\\/(\\d{${BUSINESS_DOC_LEVEL_LENGTH}})$`,
+    );
+    const match = normalized.match(regex);
+    if (!match) {
+      throw new BadRequestException(
+        `Format de commande invalide. Attendu: ${SALES_ORDER_PREFIX}/${'0'.repeat(BUSINESS_DOC_LEVEL_LENGTH)}`,
+      );
+    }
+
+    return {
+      number: normalized,
+      level: Number(match[1]),
+    };
+  }
+
+  private async allocateNextReferenceLevel(tx: any) {
+    const sequence = await tx.documentSequence.upsert({
+      where: { scope: BUSINESS_DOC_SCOPE },
+      update: { nextValue: { increment: 1 } },
+      create: { scope: BUSINESS_DOC_SCOPE, nextValue: 2 },
+      select: { nextValue: true },
+    });
+
+    return sequence.nextValue - 1;
   }
 
   private extractVersion(pathLike?: string | null): number {

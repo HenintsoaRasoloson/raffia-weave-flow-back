@@ -50,9 +50,14 @@ export class CreateInvoiceItemDto {
 }
 
 export class CreateInvoiceDto {
-  @ApiProperty({ example: 'FAC-2026-0421' })
+  @ApiPropertyOptional({
+    example: 'PRO/000188',
+    description:
+      'Reference facture. Si absente, elle est generee automatiquement selon le type.',
+  })
+  @IsOptional()
   @IsString()
-  invoiceNumber!: string;
+  invoiceNumber?: string;
 
   @ApiProperty({ example: 'FINAL', enum: ['PROFORMA', 'DEPOSIT', 'INTERMEDIATE', 'FINAL', 'CREDIT_NOTE'] })
   @IsIn(['PROFORMA', 'DEPOSIT', 'INTERMEDIATE', 'FINAL', 'CREDIT_NOTE'])
