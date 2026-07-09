@@ -575,12 +575,16 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       select: {
+        id: true,
+        invoiceNumber: true,
         status: true,
         type: true,
         totalTtc: true,
         paidAmount: true,
         currency: true,
         referenceLevel: true,
+        clientId: true,
+        salesOrderId: true,
       },
     });
     if (!invoice) {
@@ -616,6 +620,20 @@ export class InvoicesService {
           amount: dto.amount,
           paymentMethod: dto.paymentMethod as any,
           paidAt,
+          notes: dto.notes,
+        },
+      });
+
+      await tx.ledgerEntry.create({
+        data: {
+          entryDate: paidAt,
+          label: `Encaissement facture ${invoice.invoiceNumber}`,
+          entryType: 'INCOME',
+          amount: dto.amount,
+          currency: invoice.currency ?? 'EUR',
+          clientId: invoice.clientId,
+          salesOrderId: invoice.salesOrderId,
+          invoiceId: invoice.id,
           notes: dto.notes,
         },
       });

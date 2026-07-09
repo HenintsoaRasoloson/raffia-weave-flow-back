@@ -19,6 +19,7 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { AuditModule } from './common/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { GedModule } from './ged/ged.module';
+import { FinancialTrackingModule } from './financial-tracking/financial-tracking.module';
 import { ReferenceLookupModule } from './reference-lookup/reference-lookup.module';
 import { SearchModule } from './search/search.module';
 
@@ -42,6 +43,7 @@ import { SearchModule } from './search/search.module';
     NotificationsModule,
     AuditModule,
     GedModule,
+    FinancialTrackingModule,
     ReferenceLookupModule,
     SearchModule,
   ],
