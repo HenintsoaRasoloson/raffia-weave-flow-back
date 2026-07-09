@@ -15,8 +15,7 @@ import { ProductsModule } from './products/products.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { SalesOrdersModule } from './sales-orders/sales-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
-import { AuditService } from './common/audit.service';
-import { AuditController } from './common/audit.controller';
+import { AuditModule } from './common/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
@@ -36,8 +35,9 @@ import { NotificationsModule } from './notifications/notifications.module';
     DeliveriesModule,
     InvoicesModule,
     NotificationsModule,
+    AuditModule,
   ],
-  controllers: [AppController, AuditController],
-  providers: [AppService, AuditService],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
