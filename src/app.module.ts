@@ -17,6 +17,7 @@ import { SalesOrdersModule } from './sales-orders/sales-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { AuditModule } from './common/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { GedModule } from './ged/ged.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     InvoicesModule,
     NotificationsModule,
     AuditModule,
+    GedModule,
   ],
   controllers: [AppController],
   providers: [AppService],
