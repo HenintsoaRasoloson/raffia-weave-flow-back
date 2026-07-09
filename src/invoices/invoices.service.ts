@@ -44,7 +44,7 @@ export class InvoicesService {
   findOne(id: string) {
     return this.prisma.invoice.findUnique({
       where: { id },
-      include: { client: true, salesOrder: true, items: true },
+      include: { client: true, salesOrder: true, items: true, payments: true },
     });
   }
 
@@ -174,14 +174,26 @@ export class InvoicesService {
     const isFullyPaid = newPaidAmount >= total;
     const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date();
 
-    return this.prisma.invoice.update({
-      where: { id },
-      data: {
-        paidAmount: newPaidAmount,
-        status: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
-        paidAt: isFullyPaid ? paidAt : null,
-      } as any,
-      include: { items: true, client: true },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.invoicePayment.create({
+        data: {
+          invoiceId: id,
+          amount: dto.amount,
+          paymentMethod: dto.paymentMethod as any,
+          paidAt,
+          notes: dto.notes,
+        },
+      });
+
+      return tx.invoice.update({
+        where: { id },
+        data: {
+          paidAmount: newPaidAmount,
+          status: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
+          paidAt: isFullyPaid ? paidAt : null,
+        } as any,
+        include: { items: true, client: true, payments: true },
+      });
     });
   }
 

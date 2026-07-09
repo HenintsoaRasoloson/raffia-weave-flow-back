@@ -109,7 +109,7 @@ export class SalesOrdersService {
   async updateStatus(id: string, dto: UpdateSalesOrderStatusDto) {
     const order = await this.prisma.salesOrder.findUnique({
       where: { id },
-      select: { status: true },
+      select: { status: true, batRequired: true, batApprovedAt: true },
     });
     if (!order) {
       throw new NotFoundException('Commande introuvable');
@@ -134,9 +134,58 @@ export class SalesOrdersService {
       );
     }
 
+    // Bloquer le lancement en production si le BAT est requis mais pas encore approuvé
+    if (next === 'IN_PRODUCTION' && order.batRequired && !order.batApprovedAt) {
+      throw new BadRequestException(
+        'Le BAT (Bon à Tirer) doit être approuvé par le client avant de lancer la production.',
+      );
+    }
+
     return this.prisma.salesOrder.update({
       where: { id },
       data: { status: next as any },
+    });
+  }
+
+  async sendBat(id: string) {
+    const order = await this.prisma.salesOrder.findUnique({
+      where: { id },
+      select: { batRequired: true, batSentAt: true },
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+    if (!order.batRequired) {
+      throw new BadRequestException(
+        'Cette commande ne nécessite pas de BAT (batRequired = false).',
+      );
+    }
+    return this.prisma.salesOrder.update({
+      where: { id },
+      data: { batSentAt: new Date() } as any,
+    });
+  }
+
+  async approveBat(id: string) {
+    const order = await this.prisma.salesOrder.findUnique({
+      where: { id },
+      select: { batRequired: true, batSentAt: true, batApprovedAt: true },
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+    if (!order.batRequired) {
+      throw new BadRequestException(
+        'Cette commande ne nécessite pas de BAT.',
+      );
+    }
+    if (!order.batSentAt) {
+      throw new BadRequestException(
+        'Le BAT n\'a pas encore été envoyé au client. Utilisez d\'abord /bat-send.',
+      );
+    }
+    if (order.batApprovedAt) {
+      throw new BadRequestException('Le BAT a déjà été approuvé.');
+    }
+    return this.prisma.salesOrder.update({
+      where: { id },
+      data: { batApprovedAt: new Date() } as any,
     });
   }
 

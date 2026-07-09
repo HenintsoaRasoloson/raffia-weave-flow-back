@@ -58,6 +58,32 @@ export class SalesOrdersController {
     return this.salesOrdersService.updateStatus(id, dto);
   }
 
+  @Patch(':id/bat-send')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Marquer le BAT comme envoyé au client',
+    description:
+      'Enregistre la date d\'envoi du Bon à Tirer (modèle/visuel) au client. ' +
+      'Nécessite batRequired = true sur la commande.',
+  })
+  @ApiOkResponse({ description: 'BAT marqué envoyé', type: SalesOrderResponseDto })
+  sendBat(@Param('id') id: string) {
+    return this.salesOrdersService.sendBat(id);
+  }
+
+  @Patch(':id/bat-approve')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Enregistrer l\'approbation du BAT par le client',
+    description:
+      'Valide que le client a approuvé le Bon à Tirer. ' +
+      'Débloque ensuite le passage en statut IN_PRODUCTION.',
+  })
+  @ApiOkResponse({ description: 'BAT approuvé', type: SalesOrderResponseDto })
+  approveBat(@Param('id') id: string) {
+    return this.salesOrdersService.approveBat(id);
+  }
+
   @Delete(':id')
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Supprimer une commande' })

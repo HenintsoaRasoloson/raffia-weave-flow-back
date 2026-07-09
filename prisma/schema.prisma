@@ -93,12 +93,32 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+// Types de factures dans le cycle de vente :
+// PROFORMA      : facture estimative envoyée avant paiement acompte (non comptable)
+// DEPOSIT       : facture d\'acompte (ex: 30% à la commande)
+// INTERMEDIATE  : facture intermédiaire en cours de production (commandes longues)
+// FINAL         : facture du solde final à la livraison
+// CREDIT_NOTE   : avoir (remboursement partiel ou annulation)
 enum InvoiceType {
   PROFORMA
   DEPOSIT
   INTERMEDIATE
   FINAL
   CREDIT_NOTE
+}
+
+// Mode de paiement utilisé par le client :
+// CASH          : espèces
+// BANK_TRANSFER : virement bancaire
+// CHECK         : chèque
+// MOBILE_MONEY  : paiement mobile (ex: Orange Money, MTN)
+// CARD          : carte bancaire
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHECK
+  MOBILE_MONEY
+  CARD
 }
 
 enum InvoiceStatus {
@@ -324,6 +344,12 @@ model SalesOrder {
   orderType        ClientType
   status           SalesOrderStatus  @default(TO_PROCESS)
   orderDate        DateTime
+  // BAT = Bon à Tirer : validation du client sur le modèle/prototype avant lancement prod.
+  // batRequired = true  → le passage en IN_PRODUCTION est bloqué tant que batApprovedAt = null
+  // Exemple : client valide la couleur, la dimension et les finitions du sac avant fabrication
+  batRequired      Boolean           @default(false)
+  batSentAt        DateTime?         // date d\'envoi du modèle/visuel au client
+  batApprovedAt    DateTime?         // date de validation client
   productionOrders ProductionOrder[]
   items            SalesOrderItem[]
   deliveries       Delivery[]
@@ -465,6 +491,7 @@ model Invoice {
   // PARTIALLY_PAID si paidAmount < totalTtc, PAID si paidAmount >= totalTtc
   paidAmount    Decimal?       @db.Decimal(12, 2)
   items         InvoiceItem[]
+  payments      InvoicePayment[]
   subtotalHt    Decimal        @db.Decimal(12, 2)
   taxAmount     Decimal        @db.Decimal(12, 2)
   totalTtc      Decimal        @db.Decimal(12, 2)
@@ -492,6 +519,19 @@ model InvoiceItem {
   lineTotalHt      Decimal          @db.Decimal(12, 2)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
+}
+
+// Historique des versements reçus sur une facture.
+// Permet de tracer : acompte 30% par virement le J+1, solde 70% en espèces à la livraison.
+model InvoicePayment {
+  id            String         @id @default(cuid())
+  invoiceId     String
+  invoice       Invoice        @relation(fields: [invoiceId], references: [id])
+  amount        Decimal        @db.Decimal(12, 2)
+  paymentMethod PaymentMethod
+  paidAt        DateTime       @default(now())
+  notes         String?
+  createdAt     DateTime       @default(now())
 }
 
 model CatalogShare {
