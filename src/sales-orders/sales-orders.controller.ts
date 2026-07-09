@@ -1,5 +1,30 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  StreamableFile,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -8,6 +33,7 @@ import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
 import { SalesOrderResponseDto } from './dto/sales-order-response.dto';
+import { UploadBatDocumentDto } from './dto/upload-bat-document.dto';
 import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
 import { SalesOrdersService } from './sales-orders.service';
@@ -31,6 +57,75 @@ export class SalesOrdersController {
   @ApiOkResponse({ description: 'Commande trouvée', type: SalesOrderResponseDto })
   findOne(@Param('id') id: string) {
     return this.salesOrdersService.findOne(id);
+  }
+
+  @Get(':id/bat-documents')
+  @ApiOperation({ summary: 'Lister les documents BAT d\'une commande' })
+  @ApiOkResponse({ description: 'Documents BAT' })
+  listBatDocuments(@Param('id') id: string) {
+    return this.salesOrdersService.listBatDocuments(id);
+  }
+
+  @Post(':id/bat-documents')
+  @UseGuards(AdminGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 20 * 1024 * 1024 },
+      fileFilter: (_, file, cb) => {
+        const allowed = [
+          'application/pdf',
+          'image/png',
+          'image/jpeg',
+          'image/webp',
+        ];
+        cb(null, allowed.includes(file.mimetype));
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Uploader un document BAT (aperçu, signé, etc.)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        kind: {
+          type: 'string',
+          enum: ['PREVIEW', 'SENT_TO_CLIENT', 'APPROVED_SIGNED', 'OTHER'],
+        },
+        note: { type: 'string' },
+        file: { type: 'string', format: 'binary' },
+      },
+      required: ['kind', 'file'],
+    },
+  })
+  @ApiCreatedResponse({ description: 'Document BAT uploadé' })
+  uploadBatDocument(
+    @Param('id') id: string,
+    @Body() dto: UploadBatDocumentDto,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.salesOrdersService.uploadBatDocument(id, dto, file, user.sub);
+  }
+
+  @Get(':id/bat-documents/:documentId/download')
+  @ApiOperation({ summary: 'Télécharger un document BAT (décompression à la volée)' })
+  async downloadBatDocument(
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const document = await this.salesOrdersService.getBatDocumentBinary(
+      id,
+      documentId,
+    );
+    res.setHeader('Content-Type', document.mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${document.originalName}"`,
+    );
+    return new StreamableFile(document.buffer);
   }
 
   @Post()

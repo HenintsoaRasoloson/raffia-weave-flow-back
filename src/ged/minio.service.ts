@@ -39,6 +39,7 @@ export class MinioService {
     key: string;
     body: Buffer | Uint8Array | string;
     contentType: string;
+    contentEncoding?: string;
   }) {
     const client = this.getClientOrThrow();
     await client.send(
@@ -47,6 +48,7 @@ export class MinioService {
         Key: params.key,
         Body: params.body,
         ContentType: params.contentType,
+        ContentEncoding: params.contentEncoding,
       }),
     );
 
@@ -61,6 +63,20 @@ export class MinioService {
         Key: params.key,
       }),
     );
+  }
+
+  async getObjectAsBuffer(params: { bucket: string; key: string }) {
+    const objectResponse = await this.getObject(params);
+    if (!objectResponse.Body) {
+      throw new Error('Object body is empty.');
+    }
+
+    if ('transformToByteArray' in objectResponse.Body) {
+      const bytes = await objectResponse.Body.transformToByteArray();
+      return Buffer.from(bytes);
+    }
+
+    throw new Error('Unable to read object body as buffer.');
   }
 
   async removeObject(params: { bucket: string; key: string }) {

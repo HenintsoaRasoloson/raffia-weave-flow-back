@@ -60,6 +60,19 @@ sales/sales-order/so_01j777/bat_signed/2026/07/09/v1/0f9a3ad3-7e2a-4f50-8edf-17b
 - Telechargement via URL signee a duree courte
 - Bucket `archive` reserve aux documents finalises (signature/cachet) et non mutables
 
+## Cas d'usage couverts
+
+- Produits: plusieurs images par produit (upload multi-fichiers)
+- Factures: documents signes/cachetes
+- BAT: documents BAT (preview, envoye client, signe approuve)
+- Clients B2B: cartes fiscales avec date de validite
+
+## Compression images
+
+- Les images uploadées sont compressees en `gzip` avant stockage objet
+- Les endpoints de lecture (notamment image produit) decompriment a la volee
+- Objectif: reduire le volume stocke sans changer le rendu consomme par le front
+
 ## Variables d'environnement
 
 Ajoutees dans `.env`:

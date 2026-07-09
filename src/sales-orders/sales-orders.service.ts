@@ -1,9 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { mkdir, readFile, writeFile } from 'fs/promises';
+import { dirname, join } from 'path';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compression.util';
+import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
+import { GedPathsService } from '../ged/ged-paths.service';
+import { MinioService } from '../ged/minio.service';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
+import { UploadBatDocumentDto } from './dto/upload-bat-document.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
 import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
 
@@ -13,6 +20,8 @@ export class SalesOrdersService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+    private readonly minioService: MinioService,
+    private readonly gedPathsService: GedPathsService,
   ) {}
 
   findAll(query: ListQueryDto) {
@@ -56,8 +65,119 @@ export class SalesOrdersService {
         invoices: true,
         deliveries: true,
         productionOrders: true,
+        batDocuments: { orderBy: { createdAt: 'desc' } },
       },
     });
+  }
+
+  async listBatDocuments(salesOrderId: string) {
+    await this.ensureSalesOrderExists(salesOrderId);
+    return this.prisma.batDocument.findMany({
+      where: { salesOrderId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async uploadBatDocument(
+    salesOrderId: string,
+    dto: UploadBatDocumentDto,
+    file: Express.Multer.File,
+    userId?: string,
+  ) {
+    const order = await this.prisma.salesOrder.findUnique({
+      where: { id: salesOrderId },
+      select: { id: true, batRequired: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Commande introuvable');
+    }
+    if (!order.batRequired) {
+      throw new BadRequestException(
+        'Cette commande ne nécessite pas de BAT (batRequired = false).',
+      );
+    }
+    if (!file) {
+      throw new BadRequestException('Aucun fichier BAT reçu.');
+    }
+
+    const { buffer: storedBuffer, algo } = compressBufferIfNeeded(
+      file.buffer,
+      file.mimetype,
+    );
+    const objectKey = this.gedPathsService.buildObjectKey({
+      domain: 'sales',
+      entityType: 'sales-order',
+      entityId: salesOrderId,
+      documentType: `bat-${dto.kind.toLowerCase()}`,
+      originalFileName: file.originalname,
+    });
+
+    let bucket: string | null = null;
+    let persistedObjectKey: string | null = null;
+    let storagePath: string | null = null;
+
+    if (this.minioService.isEnabled()) {
+      bucket = DEFAULT_GED_BUCKET_RAW;
+      persistedObjectKey = objectKey;
+      await this.minioService.putObject({
+        bucket,
+        key: objectKey,
+        body: storedBuffer,
+        contentType: file.mimetype,
+        contentEncoding: algo === 'GZIP' ? 'gzip' : undefined,
+      });
+    } else {
+      storagePath = join(process.cwd(), 'uploads', 'ged', objectKey);
+      await mkdir(dirname(storagePath), { recursive: true });
+      await writeFile(storagePath, storedBuffer);
+    }
+
+    return this.prisma.batDocument.create({
+      data: {
+        salesOrderId,
+        kind: dto.kind as any,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        bucket,
+        objectKey: persistedObjectKey,
+        storagePath,
+        originalSize: file.size,
+        compressedSize: storedBuffer.length,
+        compressionAlgo: algo,
+        uploadedById: userId,
+      } as any,
+    });
+  }
+
+  async getBatDocumentBinary(salesOrderId: string, documentId: string) {
+    const document = await this.prisma.batDocument.findFirst({
+      where: { id: documentId, salesOrderId },
+    });
+    if (!document) {
+      throw new NotFoundException('Document BAT introuvable');
+    }
+
+    let storedBuffer: Buffer;
+    if (
+      document.bucket &&
+      document.objectKey &&
+      this.minioService.isEnabled()
+    ) {
+      storedBuffer = await this.minioService.getObjectAsBuffer({
+        bucket: document.bucket,
+        key: document.objectKey,
+      });
+    } else if (document.storagePath) {
+      storedBuffer = await readFile(document.storagePath);
+    } else {
+      throw new NotFoundException('Fichier BAT indisponible');
+    }
+
+    return {
+      originalName: document.originalName,
+      mimeType: document.mimeType,
+      buffer: decompressBufferIfNeeded(storedBuffer, document.compressionAlgo),
+    };
   }
 
   async create(dto: CreateSalesOrderDto, userId?: string) {
@@ -265,5 +385,15 @@ export class SalesOrdersService {
 
   remove(id: string) {
     return this.prisma.salesOrder.delete({ where: { id } });
+  }
+
+  private async ensureSalesOrderExists(salesOrderId: string) {
+    const order = await this.prisma.salesOrder.findUnique({
+      where: { id: salesOrderId },
+      select: { id: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Commande introuvable');
+    }
   }
 }

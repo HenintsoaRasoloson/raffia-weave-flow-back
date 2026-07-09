@@ -1,11 +1,39 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  StreamableFile,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Response } from 'express';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAccessPayload } from '../auth/auth.types';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductResponseDto } from './dto/product-response.dto';
+import { UploadProductImagesDto } from './dto/upload-product-images.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
 
@@ -28,6 +56,63 @@ export class ProductsController {
   @ApiOkResponse({ description: 'Produit trouvé', type: ProductResponseDto })
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
+  }
+
+  @Get(':id/images')
+  @ApiOperation({ summary: 'Lister les images d\'un produit' })
+  @ApiOkResponse({ description: 'Images du produit' })
+  listImages(@Param('id') id: string) {
+    return this.productsService.listImages(id);
+  }
+
+  @Post(':id/images')
+  @UseGuards(AdminGuard)
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_, file, cb) => {
+        const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+        cb(null, allowed.includes(file.mimetype));
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Uploader plusieurs images produit (compression active)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        tag: { type: 'string' },
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
+      },
+      required: ['files'],
+    },
+  })
+  @ApiCreatedResponse({ description: 'Images uploadées' })
+  uploadImages(
+    @Param('id') id: string,
+    @Body() _dto: UploadProductImagesDto,
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.productsService.uploadImages(id, files, user.sub);
+  }
+
+  @Get(':id/images/:imageId')
+  @ApiOperation({ summary: 'Lire une image produit (décompression à la volée)' })
+  async getImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const image = await this.productsService.getImageBinary(id, imageId);
+    res.setHeader('Content-Type', image.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${image.originalName}"`);
+    return new StreamableFile(image.buffer);
   }
 
   @Post()

@@ -26,9 +26,7 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { createReadStream, existsSync, mkdirSync } from 'fs';
+import { memoryStorage } from 'multer';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -43,14 +41,8 @@ import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoicesService } from './invoices.service';
 
-const INVOICE_UPLOAD_DIR = process.env.INVOICE_UPLOAD_DIR ?? 'uploads/invoices';
-
 function sanitizeFilename(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_');
-}
-
-if (!existsSync(INVOICE_UPLOAD_DIR)) {
-  mkdirSync(INVOICE_UPLOAD_DIR, { recursive: true });
 }
 
 @ApiTags('Factures')
@@ -110,14 +102,7 @@ export class InvoicesController {
   @UseGuards(AdminGuard)
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: INVOICE_UPLOAD_DIR,
-        filename: (_, file, cb) => {
-          const now = Date.now();
-          const safeName = sanitizeFilename(file.originalname);
-          cb(null, `${now}-${safeName}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: {
         fileSize: 10 * 1024 * 1024,
       },
@@ -174,9 +159,9 @@ export class InvoicesController {
     res.setHeader('Content-Type', doc.mimeType);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${sanitizeFilename(doc.originalName)}${extname(doc.originalName) ? '' : extname(doc.storedName)}"`,
+      `attachment; filename="${sanitizeFilename(doc.originalName)}"`,
     );
-    return new StreamableFile(createReadStream(doc.storagePath));
+    return new StreamableFile(doc.buffer);
   }
 
   @Post()

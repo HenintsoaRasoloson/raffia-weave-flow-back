@@ -1,5 +1,32 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  StreamableFile,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAccessPayload } from '../auth/auth.types';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ListQueryDto } from '../common/dto/list-query.dto';
@@ -7,6 +34,7 @@ import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.d
 import { ClientsService } from './clients.service';
 import { ClientResponseDto } from './dto/client-response.dto';
 import { CreateClientDto } from './dto/create-client.dto';
+import { UploadClientFiscalCardDto } from './dto/upload-client-fiscal-card.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 
 @ApiTags('Clients')
@@ -28,6 +56,61 @@ export class ClientsController {
   @ApiOkResponse({ description: 'Client trouvé', type: ClientResponseDto })
   findOne(@Param('id') id: string) {
     return this.clientsService.findOne(id);
+  }
+
+  @Get(':id/fiscal-cards')
+  @ApiOperation({ summary: 'Lister les cartes fiscales d\'un client (B2B)' })
+  @ApiOkResponse({ description: 'Cartes fiscales du client' })
+  listFiscalCards(@Param('id') id: string) {
+    return this.clientsService.listFiscalCards(id);
+  }
+
+  @Post(':id/fiscal-cards')
+  @UseGuards(AdminGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_, file, cb) => {
+        const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+        cb(null, allowed.includes(file.mimetype));
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Uploader une carte fiscale (image) pour un client B2B' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        validUntil: { type: 'string', format: 'date-time' },
+        note: { type: 'string' },
+        file: { type: 'string', format: 'binary' },
+      },
+      required: ['validUntil', 'file'],
+    },
+  })
+  @ApiCreatedResponse({ description: 'Carte fiscale uploadée' })
+  uploadFiscalCard(
+    @Param('id') id: string,
+    @Body() dto: UploadClientFiscalCardDto,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.clientsService.uploadFiscalCard(id, dto, file, user.sub);
+  }
+
+  @Get(':id/fiscal-cards/:cardId')
+  @ApiOperation({ summary: 'Lire la carte fiscale (décompression à la volée)' })
+  async getFiscalCard(
+    @Param('id') id: string,
+    @Param('cardId') cardId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const card = await this.clientsService.getFiscalCardBinary(id, cardId);
+    res.setHeader('Content-Type', card.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${card.originalName}"`);
+    return new StreamableFile(card.buffer);
   }
 
   @Post()

@@ -1,8 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { mkdir, readFile, writeFile } from 'fs/promises';
+import { dirname, join } from 'path';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compression.util';
+import { DEFAULT_GED_BUCKET_ARCHIVE } from '../ged/ged.constants';
+import { GedPathsService } from '../ged/ged-paths.service';
+import { MinioService } from '../ged/minio.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { UploadInvoiceDocumentDto } from './dto/upload-invoice-document.dto';
@@ -17,6 +23,8 @@ export class InvoicesService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+    private readonly minioService: MinioService,
+    private readonly gedPathsService: GedPathsService,
   ) {}
 
   findAll(query: ListQueryDto) {
@@ -83,15 +91,54 @@ export class InvoicesService {
       throw new BadRequestException('Aucun fichier reçu. Champ attendu: file');
     }
 
+    const { buffer: storedBuffer, algo } = compressBufferIfNeeded(
+      file.buffer,
+      file.mimetype,
+    );
+
+    const objectKey = this.gedPathsService.buildObjectKey({
+      domain: 'finance',
+      entityType: 'invoice',
+      entityId: invoiceId,
+      documentType: `signed-${dto.kind.toLowerCase()}`,
+      originalFileName: file.originalname,
+    });
+
+    const storedName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    let bucket: string | null = null;
+    let persistedObjectKey: string | null = null;
+    let storagePath: string | null = null;
+
+    if (this.minioService.isEnabled()) {
+      bucket = DEFAULT_GED_BUCKET_ARCHIVE;
+      persistedObjectKey = objectKey;
+      await this.minioService.putObject({
+        bucket,
+        key: objectKey,
+        body: storedBuffer,
+        contentType: file.mimetype,
+        contentEncoding: algo === 'GZIP' ? 'gzip' : undefined,
+      });
+    } else {
+      storagePath = join(process.cwd(), 'uploads', 'invoices', objectKey);
+      await mkdir(dirname(storagePath), { recursive: true });
+      await writeFile(storagePath, storedBuffer);
+    }
+
     return this.prisma.invoiceDocument.create({
       data: {
         invoiceId,
         kind: dto.kind as any,
         originalName: file.originalname,
-        storedName: file.filename,
+        storedName,
         mimeType: file.mimetype,
         fileSize: file.size,
-        storagePath: file.path,
+        storagePath,
+        bucket,
+        objectKey: persistedObjectKey,
+        originalSize: file.size,
+        compressedSize: storedBuffer.length,
+        compressionAlgo: algo,
         uploadedById: userId,
       },
     });
@@ -109,7 +156,22 @@ export class InvoicesService {
       throw new NotFoundException('Document de facture introuvable');
     }
 
-    return document;
+    let storedBuffer: Buffer;
+    if (document.bucket && document.objectKey && this.minioService.isEnabled()) {
+      storedBuffer = await this.minioService.getObjectAsBuffer({
+        bucket: document.bucket,
+        key: document.objectKey,
+      });
+    } else if (document.storagePath) {
+      storedBuffer = await readFile(document.storagePath);
+    } else {
+      throw new NotFoundException('Fichier de facture indisponible');
+    }
+
+    return {
+      ...document,
+      buffer: decompressBufferIfNeeded(storedBuffer, document.compressionAlgo),
+    };
   }
 
   listTemplates() {

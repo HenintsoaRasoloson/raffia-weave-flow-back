@@ -138,6 +138,18 @@ enum InvoiceDocumentKind {
   OTHER
 }
 
+enum BatDocumentKind {
+  PREVIEW
+  SENT_TO_CLIENT
+  APPROVED_SIGNED
+  OTHER
+}
+
+enum CompressionAlgo {
+  NONE
+  GZIP
+}
+
 enum CatalogShareStatus {
   ACTIVE
   EXPIRED
@@ -198,6 +210,9 @@ model User {
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
   auditLogs           AuditLog[]
+  uploadedProductImages ProductImage[]
+  uploadedBatDocuments BatDocument[]
+  uploadedClientFiscalCards ClientFiscalCard[]
   uploadedInvoiceDocuments InvoiceDocument[]
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
@@ -278,8 +293,28 @@ model Product {
   bomItems         BomItem[]
   shareLinks       CatalogShareProduct[]
   invoiceItems     InvoiceItem[]
+  productImages    ProductImage[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+}
+
+model ProductImage {
+  id              String          @id @default(cuid())
+  productId       String
+  product         Product         @relation(fields: [productId], references: [id])
+  originalName    String
+  mimeType        String
+  bucket          String?
+  objectKey       String?
+  storagePath     String?
+  originalSize    Int
+  compressedSize  Int
+  compressionAlgo CompressionAlgo @default(GZIP)
+  uploadedById    String?
+  uploadedBy      User?           @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime        @default(now())
+
+  @@index([productId])
 }
 
 model ProductVariant {
@@ -319,9 +354,31 @@ model Client {
   deliveries    Delivery[]
   invoices      Invoice[]
   shares        CatalogShare[]
+  fiscalCards   ClientFiscalCard[]
   ledgerEntries LedgerEntry[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
+}
+
+model ClientFiscalCard {
+  id              String          @id @default(cuid())
+  clientId        String
+  client          Client          @relation(fields: [clientId], references: [id])
+  originalName    String
+  mimeType        String
+  bucket          String?
+  objectKey       String?
+  storagePath     String?
+  originalSize    Int
+  compressedSize  Int
+  compressionAlgo CompressionAlgo @default(GZIP)
+  validUntil      DateTime
+  uploadedById    String?
+  uploadedBy      User?           @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime        @default(now())
+
+  @@index([clientId])
+  @@index([clientId, validUntil])
 }
 
 model Supplier {
@@ -400,6 +457,7 @@ model SalesOrder {
   batRequired      Boolean           @default(false)
   batSentAt        DateTime?         // date d\'envoi du modèle/visuel au client
   batApprovedAt    DateTime?         // date de validation client
+  batDocuments     BatDocument[]
   productionOrders ProductionOrder[]
   items            SalesOrderItem[]
   deliveries       Delivery[]
@@ -413,6 +471,27 @@ model SalesOrder {
   notes            String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+}
+
+model BatDocument {
+  id              String          @id @default(cuid())
+  salesOrderId    String
+  salesOrder      SalesOrder      @relation(fields: [salesOrderId], references: [id])
+  kind            BatDocumentKind @default(PREVIEW)
+  originalName    String
+  mimeType        String
+  bucket          String?
+  objectKey       String?
+  storagePath     String?
+  originalSize    Int
+  compressedSize  Int
+  compressionAlgo CompressionAlgo @default(NONE)
+  uploadedById    String?
+  uploadedBy      User?           @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime        @default(now())
+
+  @@index([salesOrderId])
+  @@index([salesOrderId, kind])
 }
 
 model SalesOrderItem {
@@ -573,7 +652,12 @@ model InvoiceDocument {
   storedName   String
   mimeType     String
   fileSize     Int
-  storagePath  String
+  storagePath  String?
+  bucket       String?
+  objectKey    String?
+  originalSize Int?
+  compressedSize Int?
+  compressionAlgo CompressionAlgo @default(NONE)
   uploadedById String?
   uploadedBy   User?               @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
   createdAt    DateTime            @default(now())
