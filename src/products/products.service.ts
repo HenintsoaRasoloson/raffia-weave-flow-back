@@ -333,15 +333,101 @@ export class ProductsService {
   }
 
   create(dto: CreateProductDto) {
-    return this.prisma.product.create({
-      data: dto as any,
+    return this.prisma.$transaction(async (tx) => {
+      const category = await tx.category.findUnique({
+        where: { id: dto.categoryId },
+        select: { id: true, code: true, slug: true, name: true },
+      });
+
+      if (!category) {
+        throw new NotFoundException('Categorie introuvable');
+      }
+
+      this.assertRefMatchesCategory(dto.ref, category);
+
+      return tx.product.create({
+        data: {
+          ref: dto.ref.trim().toUpperCase(),
+          name: dto.name,
+          description: dto.description,
+          categoryId: dto.categoryId,
+          basePrice: dto.basePrice,
+          stockOnHand: dto.stockOnHand,
+          status: dto.status as any,
+          variants: dto.variants?.length
+            ? {
+                create: dto.variants.map((variant) => ({
+                  sku: variant.sku,
+                  colorId: variant.colorId,
+                  size: (variant.size ?? 'MM') as any,
+                  defaultDimensions: variant.defaultDimensions,
+                  name: variant.name,
+                  stockOnHand: variant.stockOnHand ?? 0,
+                  priceOverride: variant.priceOverride,
+                  active: variant.active ?? true,
+                })),
+              }
+            : undefined,
+        } as any,
+      });
     });
   }
 
   update(id: string, dto: UpdateProductDto) {
-    return this.prisma.product.update({
-      where: { id },
-      data: dto as any,
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.product.findUnique({
+        where: { id },
+        select: { id: true, categoryId: true, ref: true },
+      });
+
+      if (!existing) {
+        throw new NotFoundException('Produit introuvable');
+      }
+
+      const targetCategoryId = dto.categoryId ?? existing.categoryId;
+      const targetRef = dto.ref ?? existing.ref;
+
+      const category = await tx.category.findUnique({
+        where: { id: targetCategoryId },
+        select: { id: true, code: true, slug: true, name: true },
+      });
+
+      if (!category) {
+        throw new NotFoundException('Categorie introuvable');
+      }
+
+      this.assertRefMatchesCategory(targetRef, category);
+
+      const updated = await tx.product.update({
+        where: { id },
+        data: {
+          ...dto,
+          ...(dto.ref ? { ref: dto.ref.trim().toUpperCase() } : {}),
+          variants: undefined,
+        } as any,
+      });
+
+      if (dto.variants) {
+        await tx.productVariant.deleteMany({ where: { productId: id } });
+
+        if (dto.variants.length > 0) {
+          await tx.productVariant.createMany({
+            data: dto.variants.map((variant) => ({
+              productId: id,
+              sku: variant.sku,
+              colorId: variant.colorId,
+              size: (variant.size ?? 'MM') as any,
+              defaultDimensions: variant.defaultDimensions,
+              name: variant.name,
+              stockOnHand: variant.stockOnHand ?? 0,
+              priceOverride: variant.priceOverride as any,
+              active: variant.active ?? true,
+            })),
+          });
+        }
+      }
+
+      return updated;
     });
   }
 
@@ -382,5 +468,47 @@ export class ProductsService {
     if (image.storagePath) {
       await unlink(image.storagePath).catch(() => undefined);
     }
+  }
+
+  private assertRefMatchesCategory(
+    rawRef: string,
+    category: { code: string | null; slug: string; name: string },
+  ) {
+    const ref = rawRef.trim().toUpperCase();
+    if (!ref) {
+      throw new BadRequestException('La reference produit est obligatoire');
+    }
+
+    const categoryPrefix = this.getCategoryRefPrefix(category);
+    if (!ref.startsWith(`${categoryPrefix}/`)) {
+      throw new BadRequestException(
+        `Reference invalide: le prefixe attendu est ${categoryPrefix}/ (ex: ${categoryPrefix}/123123)`,
+      );
+    }
+
+    const suffix = ref.slice(categoryPrefix.length + 1);
+    if (!suffix) {
+      throw new BadRequestException(
+        'Reference invalide: ajoute un identifiant apres le prefixe de categorie',
+      );
+    }
+  }
+
+  private getCategoryRefPrefix(category: {
+    code: string | null;
+    slug: string;
+    name: string;
+  }) {
+    if (category.code?.trim()) {
+      return category.code.trim().toUpperCase();
+    }
+
+    const base = (category.slug || category.name)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9]/g, '')
+      .toUpperCase();
+
+    return (base.slice(0, 3) || 'CAT').toUpperCase();
   }
 }

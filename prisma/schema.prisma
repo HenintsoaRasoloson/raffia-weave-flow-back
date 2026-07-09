@@ -31,6 +31,12 @@ enum ProductStatus {
   ARCHIVED
 }
 
+enum ProductSize {
+  PM
+  MM
+  GM
+}
+
 enum MaterialUnit {
   KG
   M2
@@ -271,6 +277,7 @@ model CompanySetting {
 model Category {
   id        String    @id @default(cuid())
   name      String
+  code      String?   @unique
   slug      String    @unique
   products  Product[]
   createdAt DateTime  @default(now())
@@ -373,6 +380,8 @@ model ProductVariant {
   product          Product             @relation(fields: [productId], references: [id])
   colorId          String?
   color            Color?              @relation(fields: [colorId], references: [id])
+  size             ProductSize         @default(MM)
+  defaultDimensions String?
   name             String?
   stockOnHand      Int                 @default(0)
   priceOverride    Decimal?            @db.Decimal(12, 2)
@@ -383,6 +392,8 @@ model ProductVariant {
   invoiceItems     InvoiceItem[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+
+  @@index([productId, size])
 }
 
 model Client {
