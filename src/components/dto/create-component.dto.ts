@@ -1,6 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
+const MATERIAL_UNITS = ['KG', 'M2', 'M', 'PCS', 'BOBBIN'] as const;
+const COMPONENT_ORIGINS = ['PURCHASED', 'MANUFACTURED'] as const;
+
 export class CreateComponentDto {
   @ApiProperty()
   @IsString()
@@ -10,9 +13,9 @@ export class CreateComponentDto {
   @IsString()
   name!: string;
 
-  @ApiProperty({ enum: ['KG', 'M2', 'M', 'PCS', 'BOBBIN'] })
-  @IsIn(['KG', 'M2', 'M', 'PCS', 'BOBBIN'])
-  unit!: 'KG' | 'M2' | 'M' | 'PCS' | 'BOBBIN';
+  @ApiProperty({ enum: MATERIAL_UNITS })
+  @IsIn([...MATERIAL_UNITS])
+  unit!: (typeof MATERIAL_UNITS)[number];
 
   @ApiProperty()
   @IsNumber()
@@ -30,7 +33,18 @@ export class CreateComponentDto {
   @Min(0)
   costPerUnit?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    enum: COMPONENT_ORIGINS,
+    description:
+      'PURCHASED = acheté à un fournisseur (raphia brut, anneaux métal). ' +
+      'MANUFACTURED = fabriqué en interne (plaque de raphia, sangle découpée).',
+    default: 'PURCHASED',
+  })
+  @IsOptional()
+  @IsIn([...COMPONENT_ORIGINS])
+  origin?: (typeof COMPONENT_ORIGINS)[number];
+
+  @ApiPropertyOptional({ description: 'Requis si origin = PURCHASED' })
   @IsOptional()
   @IsString()
   supplierId?: string;

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateComponentDto } from './dto/create-component.dto';
@@ -46,10 +46,21 @@ export class ComponentsService {
   }
 
   create(dto: CreateComponentDto) {
+    const origin = dto.origin ?? 'PURCHASED';
+    if (origin === 'PURCHASED' && !dto.supplierId) {
+      throw new BadRequestException(
+        'supplierId est requis pour un composant de type PURCHASED (acheté à un fournisseur).',
+      );
+    }
     return this.prisma.component.create({ data: dto as any });
   }
 
   update(id: string, dto: UpdateComponentDto) {
+    if (dto.origin === 'PURCHASED' && dto.supplierId === null) {
+      throw new BadRequestException(
+        'supplierId ne peut pas être null pour un composant de type PURCHASED.',
+      );
+    }
     return this.prisma.component.update({ where: { id }, data: dto as any });
   }
 

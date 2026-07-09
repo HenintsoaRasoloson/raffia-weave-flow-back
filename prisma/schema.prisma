@@ -289,18 +289,27 @@ model Component {
   updatedAt          DateTime          @updatedAt
 }
 
+// BOM = Bill of Materials (Nomenclature de fabrication)
+// Chaque ligne BomItem décrit UNE matière première nécessaire pour fabriquer UN produit.
+// Exemple — Nomenclature du "Sac raphia naturel M" :
+//   BomItem 1 : componentId=raphia-brut,   quantity=0.5  (unité KG)
+//   BomItem 2 : componentId=plaque-raphia, quantity=2    (unité PCS)
+//   BomItem 3 : componentId=sangle-cuir,   quantity=1    (unité M)
+//   BomItem 4 : componentId=anneau-metal,  quantity=2    (unité PCS)
+// → Lors d'un ordre de production de 10 sacs, le système consomme automatiquement :
+//     5 kg raphia brut, 20 plaques, 10m sangle, 20 anneaux
 model BomItem {
   id          String          @id @default(cuid())
   productId   String
   product     Product         @relation(fields: [productId], references: [id])
-  variantId   String?
+  variantId   String?         // optionnel : si la nomenclature diffère selon la variante (couleur, taille)
   variant     ProductVariant? @relation(fields: [variantId], references: [id])
   componentId String
   component   Component       @relation(fields: [componentId], references: [id])
-  colorId     String?
+  colorId     String?         // optionnel : spécifie la couleur du composant si applicable
   color       Color?          @relation(fields: [colorId], references: [id])
-  quantity    Decimal         @db.Decimal(14, 4)
-  unitCost    Decimal?        @db.Decimal(12, 4)
+  quantity    Decimal         @db.Decimal(14, 4) // quantité nécessaire par unité de produit fini
+  unitCost    Decimal?        @db.Decimal(12, 4) // coût unitaire snapshot au moment de la création
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
