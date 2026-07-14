@@ -655,8 +655,8 @@
     "semantic_hash": ""
   },
   "src/production-orders/production-orders.controller.ts": {
-    "mtime": 1783581610.7112243,
-    "ast_hash": "2c58012c3eff2f1422198f20a2bd93df",
+    "mtime": 1784024483.8629262,
+    "ast_hash": "0ac0f33b93e68f2006d3dcdc78f06e8e",
     "semantic_hash": ""
   },
   "src/production-orders/production-orders.module.ts": {
@@ -665,8 +665,8 @@
     "semantic_hash": ""
   },
   "src/production-orders/production-orders.service.ts": {
-    "mtime": 1784018135.9664345,
-    "ast_hash": "65a93caaa7862b5762d646c35100fae2",
+    "mtime": 1784024652.1986969,
+    "ast_hash": "5e45df34212ce11be234304414347a57",
     "semantic_hash": ""
   },
   "src/products/dto/create-product.dto.ts": {
@@ -1137,6 +1137,31 @@
   "test/mocks/prisma-client.ts": {
     "mtime": 1784018657.7231083,
     "ast_hash": "0cb9a8c7a66260e8a55f51045f741d05",
+    "semantic_hash": ""
+  },
+  "src/production-orders/dto/planning-query.dto.ts": {
+    "mtime": 1784024430.613019,
+    "ast_hash": "71ea42b48f7d1efa2863c9d2853e147e",
+    "semantic_hash": ""
+  },
+  "src/production-orders/dto/production-planning-response.dto.ts": {
+    "mtime": 1784024433.2107008,
+    "ast_hash": "1846c4755fbd3f5acc7611e1920fbfdb",
+    "semantic_hash": ""
+  },
+  "src/production-orders/dto/production-step-response.dto.ts": {
+    "mtime": 1784024434.8128831,
+    "ast_hash": "8b3da10e8850cbaac93e9dafc5424d58",
+    "semantic_hash": ""
+  },
+  "src/production-orders/dto/upsert-production-stages.dto.ts": {
+    "mtime": 1784024434.7123692,
+    "ast_hash": "b5d08aa3f8b85b2164f0a77b196c1acf",
+    "semantic_hash": ""
+  },
+  "src/production-orders/production-orders.service.spec.ts": {
+    "mtime": 1784024655.2188141,
+    "ast_hash": "0408b91160b3d25f48fcac0428b395e2",
     "semantic_hash": ""
   }
 }

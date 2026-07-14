@@ -1,5 +1,21 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -7,9 +23,12 @@ import { JwtAccessPayload } from '../auth/auth.types';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
+import { PlanningQueryDto } from './dto/planning-query.dto';
 import { ProductionOrderResponseDto } from './dto/production-order-response.dto';
+import { ProductionPlanningResponseDto } from './dto/production-planning-response.dto';
 import { UpdateProductionOrderDto } from './dto/update-production-order.dto';
 import { UpdateProductionProgressDto } from './dto/update-production-progress.dto';
+import { UpsertProductionStagesDto } from './dto/upsert-production-stages.dto';
 import { ProductionOrdersService } from './production-orders.service';
 
 @ApiTags('Production')
@@ -29,6 +48,20 @@ export class ProductionOrdersController {
   )
   findAll(@Query() query: ListQueryDto) {
     return this.productionOrdersService.findAll(query);
+  }
+
+  @Get('planning')
+  @ApiOperation({
+    summary: 'Planning charge atelier par etape',
+    description:
+      'Retourne la matrice etape x jour (charge = nombre d OF dont l etape planifiee chevauche chaque jour).',
+  })
+  @ApiOkResponse({
+    description: 'Matrice de charge atelier',
+    type: ProductionPlanningResponseDto,
+  })
+  getPlanning(@Query() query: PlanningQueryDto): Promise<ProductionPlanningResponseDto> {
+    return this.productionOrdersService.getPlanning(query);
   }
 
   @Get(':id')
@@ -55,6 +88,21 @@ export class ProductionOrdersController {
   @ApiOkResponse({ description: 'OF mis à jour', type: ProductionOrderResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateProductionOrderDto) {
     return this.productionOrdersService.update(id, dto);
+  }
+
+  @Patch(':id/stages')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Planifier / mettre a jour les etapes atelier d un OF',
+    description:
+      'Upsert des ProductionStep (plannedStart/plannedEnd, progress). Necessaire pour alimenter le planning charge atelier.',
+  })
+  @ApiOkResponse({
+    description: 'OF avec etapes mises a jour',
+    type: ProductionOrderResponseDto,
+  })
+  upsertStages(@Param('id') id: string, @Body() dto: UpsertProductionStagesDto) {
+    return this.productionOrdersService.upsertStages(id, dto);
   }
 
   @Patch(':id/progress')
