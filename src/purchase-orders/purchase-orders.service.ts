@@ -2,17 +2,19 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { RecordPurchaseOrderPaymentDto } from './dto/record-purchase-order-payment.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
 
-const BUSINESS_DOC_SCOPE = 'business-documents';
-const BUSINESS_DOC_LEVEL_LENGTH = 6;
 const PURCHASE_ORDER_PREFIX = 'ACH';
 
 @Injectable()
 export class PurchaseOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly documentReferenceService: DocumentReferenceService,
+  ) {}
 
   async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
@@ -61,12 +63,19 @@ export class PurchaseOrdersService {
       let orderNumber: string;
 
       if (dto.orderNumber?.trim()) {
-        const parsed = this.parsePurchaseOrderNumber(dto.orderNumber);
+        const parsed = this.documentReferenceService.parseReferenceNumber(
+          PURCHASE_ORDER_PREFIX,
+          dto.orderNumber,
+          'achat',
+        );
         referenceLevel = parsed.level;
         orderNumber = parsed.number;
       } else {
-        referenceLevel = await this.allocateNextReferenceLevel(tx as any);
-        orderNumber = this.buildPurchaseOrderNumber(referenceLevel);
+        referenceLevel = await this.documentReferenceService.allocateNextReferenceLevel(tx);
+        orderNumber = this.documentReferenceService.buildReferenceNumber(
+          PURCHASE_ORDER_PREFIX,
+          referenceLevel,
+        );
       }
 
       return tx.purchaseOrder.create({
@@ -100,7 +109,11 @@ export class PurchaseOrdersService {
   update(id: string, dto: UpdatePurchaseOrderDto) {
     const payload: Record<string, unknown> = { ...dto };
     if (dto.orderNumber !== undefined) {
-      const parsed = this.parsePurchaseOrderNumber(dto.orderNumber);
+      const parsed = this.documentReferenceService.parseReferenceNumber(
+        PURCHASE_ORDER_PREFIX,
+        dto.orderNumber,
+        'achat',
+      );
       payload.orderNumber = parsed.number;
       payload.referenceLevel = parsed.level;
     }
@@ -262,39 +275,5 @@ export class PurchaseOrdersService {
   remove(id: string) {
     return this.prisma.purchaseOrder.delete({ where: { id } });
   }
-
-  private buildPurchaseOrderNumber(level: number) {
-    return `${PURCHASE_ORDER_PREFIX}/${level
-      .toString()
-      .padStart(BUSINESS_DOC_LEVEL_LENGTH, '0')}`;
-  }
-
-  private parsePurchaseOrderNumber(rawOrderNumber: string) {
-    const normalized = rawOrderNumber.trim().toUpperCase();
-    const regex = new RegExp(
-      `^${PURCHASE_ORDER_PREFIX}\\/(\\d{${BUSINESS_DOC_LEVEL_LENGTH}})$`,
-    );
-    const match = normalized.match(regex);
-    if (!match) {
-      throw new BadRequestException(
-        `Format achat invalide. Attendu: ${PURCHASE_ORDER_PREFIX}/${'0'.repeat(BUSINESS_DOC_LEVEL_LENGTH)}`,
-      );
-    }
-
-    return {
-      number: normalized,
-      level: Number(match[1]),
-    };
-  }
-
-  private async allocateNextReferenceLevel(tx: any) {
-    const sequence = await tx.documentSequence.upsert({
-      where: { scope: BUSINESS_DOC_SCOPE },
-      update: { nextValue: { increment: 1 } },
-      create: { scope: BUSINESS_DOC_SCOPE, nextValue: 2 },
-      select: { nextValue: true },
-    });
-
-    return sequence.nextValue - 1;
-  }
 }
+

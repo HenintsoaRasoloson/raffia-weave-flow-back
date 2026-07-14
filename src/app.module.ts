@@ -19,6 +19,7 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { SalesOrdersModule } from './sales-orders/sales-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { AuditModule } from './common/audit.module';
+import { DocumentReferenceModule } from './common/document-reference/document-reference.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { GedModule } from './ged/ged.module';
 import { FinancialTrackingModule } from './financial-tracking/financial-tracking.module';
@@ -29,6 +30,7 @@ import { UsersModule } from './users/users.module';
 @Module({
   imports: [
     PrismaModule,
+    DocumentReferenceModule,
     AuthModule,
     CatalogSharesModule,
     CategoriesModule,

@@ -10,14 +10,14 @@ import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compres
 import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
 import { GedPathsService } from '../ged/ged-paths.service';
 import { MinioService } from '../ged/minio.service';
+import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
+import { SALES_ORDER_STATUS_TRANSITIONS } from '../common/domain/sales-order-status.transitions';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
 import { UploadBatDocumentDto } from './dto/upload-bat-document.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
 import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
 
-const BUSINESS_DOC_SCOPE = 'business-documents';
 const SALES_ORDER_PREFIX = 'CMD';
-const BUSINESS_DOC_LEVEL_LENGTH = 6;
 
 @Injectable()
 export class SalesOrdersService {
@@ -27,6 +27,7 @@ export class SalesOrdersService {
     private readonly notificationsService: NotificationsService,
     private readonly minioService: MinioService,
     private readonly gedPathsService: GedPathsService,
+    private readonly documentReferenceService: DocumentReferenceService,
   ) {}
 
   async findAll(query: ListQueryDto) {
@@ -254,12 +255,19 @@ export class SalesOrdersService {
       let orderNumber: string;
 
       if (dto.orderNumber?.trim()) {
-        const parsed = this.parseSalesOrderNumber(dto.orderNumber);
+        const parsed = this.documentReferenceService.parseReferenceNumber(
+          SALES_ORDER_PREFIX,
+          dto.orderNumber,
+          'de commande',
+        );
         referenceLevel = parsed.level;
         orderNumber = parsed.number;
       } else {
-        referenceLevel = await this.allocateNextReferenceLevel(tx as any);
-        orderNumber = this.buildSalesOrderNumber(referenceLevel);
+        referenceLevel = await this.documentReferenceService.allocateNextReferenceLevel(tx);
+        orderNumber = this.documentReferenceService.buildReferenceNumber(
+          SALES_ORDER_PREFIX,
+          referenceLevel,
+        );
       }
 
       return tx.salesOrder.create({
@@ -334,7 +342,11 @@ export class SalesOrdersService {
     return this.prisma.$transaction(async (tx) => {
       const payload: Record<string, unknown> = { ...dto };
       if (dto.orderNumber !== undefined) {
-        const parsed = this.parseSalesOrderNumber(dto.orderNumber);
+        const parsed = this.documentReferenceService.parseReferenceNumber(
+          SALES_ORDER_PREFIX,
+          dto.orderNumber,
+          'de commande',
+        );
         payload.orderNumber = parsed.number;
         payload.referenceLevel = parsed.level;
       }
@@ -372,18 +384,8 @@ export class SalesOrdersService {
       throw new NotFoundException('Commande introuvable');
     }
 
-    const allowedTransitions: Record<string, string[]> = {
-      QUOTE: ['TO_PROCESS', 'CANCELLED'],
-      TO_PROCESS: ['IN_PRODUCTION', 'PREPARING', 'CANCELLED'],
-      IN_PRODUCTION: ['PREPARING', 'SHIPPED', 'CANCELLED'],
-      PREPARING: ['SHIPPED', 'CANCELLED'],
-      SHIPPED: ['DELIVERED', 'CANCELLED'],
-      DELIVERED: ['INVOICED'],
-      INVOICED: [],
-      CANCELLED: [],
-    };
-
-    const current = order.status as unknown as string;
+    const allowedTransitions = SALES_ORDER_STATUS_TRANSITIONS;
+    const current = order.status;
     const next = dto.status;
     if (!allowedTransitions[current]?.includes(next)) {
       throw new BadRequestException(
@@ -492,41 +494,6 @@ export class SalesOrdersService {
     if (!order) {
       throw new NotFoundException('Commande introuvable');
     }
-  }
-
-  private buildSalesOrderNumber(level: number) {
-    return `${SALES_ORDER_PREFIX}/${level
-      .toString()
-      .padStart(BUSINESS_DOC_LEVEL_LENGTH, '0')}`;
-  }
-
-  private parseSalesOrderNumber(rawOrderNumber: string) {
-    const normalized = rawOrderNumber.trim().toUpperCase();
-    const regex = new RegExp(
-      `^${SALES_ORDER_PREFIX}\\/(\\d{${BUSINESS_DOC_LEVEL_LENGTH}})$`,
-    );
-    const match = normalized.match(regex);
-    if (!match) {
-      throw new BadRequestException(
-        `Format de commande invalide. Attendu: ${SALES_ORDER_PREFIX}/${'0'.repeat(BUSINESS_DOC_LEVEL_LENGTH)}`,
-      );
-    }
-
-    return {
-      number: normalized,
-      level: Number(match[1]),
-    };
-  }
-
-  private async allocateNextReferenceLevel(tx: any) {
-    const sequence = await tx.documentSequence.upsert({
-      where: { scope: BUSINESS_DOC_SCOPE },
-      update: { nextValue: { increment: 1 } },
-      create: { scope: BUSINESS_DOC_SCOPE, nextValue: 2 },
-      select: { nextValue: true },
-    });
-
-    return sequence.nextValue - 1;
   }
 
   private extractVersion(pathLike?: string | null): number {

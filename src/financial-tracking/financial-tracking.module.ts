@@ -7,5 +7,6 @@ import { FinancialTrackingService } from './financial-tracking.service';
   imports: [NotificationsModule],
   controllers: [FinancialTrackingController],
   providers: [FinancialTrackingService],
+  exports: [FinancialTrackingService],
 })
 export class FinancialTrackingModule {}

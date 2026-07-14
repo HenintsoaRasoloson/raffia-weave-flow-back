@@ -3,13 +3,13 @@ import { ListQueryDto } from '../common/dto/list-query.dto';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SalesOrdersService } from '../sales-orders/sales-orders.service';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
 import { UpdateProductionProgressDto } from './dto/update-production-progress.dto';
 import { UpdateProductionOrderDto } from './dto/update-production-order.dto';
 
-const BUSINESS_DOC_SCOPE = 'business-documents';
-const BUSINESS_DOC_LEVEL_LENGTH = 6;
 const PRODUCTION_ORDER_PREFIX = 'OF';
 
 @Injectable()
@@ -18,6 +18,8 @@ export class ProductionOrdersService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+    private readonly documentReferenceService: DocumentReferenceService,
+    private readonly salesOrdersService: SalesOrdersService,
   ) {}
 
   async findAll(query: ListQueryDto) {
@@ -76,7 +78,7 @@ export class ProductionOrdersService {
 
         linkedOrderLevel = salesOrder.referenceLevel;
         if (linkedOrderLevel === null) {
-          linkedOrderLevel = await this.allocateNextReferenceLevel(tx as any);
+          linkedOrderLevel = await this.documentReferenceService.allocateNextReferenceLevel(tx);
           await tx.salesOrder.update({
             where: { id: salesOrder.id },
             data: { referenceLevel: linkedOrderLevel },
@@ -87,7 +89,11 @@ export class ProductionOrdersService {
       let orderNumber: string;
       let referenceLevel: number;
       if (dto.orderNumber?.trim()) {
-        const parsed = this.parseProductionOrderNumber(dto.orderNumber);
+        const parsed = this.documentReferenceService.parseReferenceNumber(
+          PRODUCTION_ORDER_PREFIX,
+          dto.orderNumber,
+          'OF',
+        );
         if (linkedOrderLevel !== null && parsed.level !== linkedOrderLevel) {
           throw new BadRequestException(
             `Reference OF invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${linkedOrderLevel}`,
@@ -97,8 +103,11 @@ export class ProductionOrdersService {
         referenceLevel = parsed.level;
       } else {
         referenceLevel =
-          linkedOrderLevel ?? (await this.allocateNextReferenceLevel(tx as any));
-        orderNumber = this.buildProductionOrderNumber(referenceLevel);
+          linkedOrderLevel ?? (await this.documentReferenceService.allocateNextReferenceLevel(tx));
+        orderNumber = this.documentReferenceService.buildReferenceNumber(
+          PRODUCTION_ORDER_PREFIX,
+          referenceLevel,
+        );
       }
 
       const payload: Record<string, unknown> = {
@@ -120,10 +129,9 @@ export class ProductionOrdersService {
 
     // Passer la commande client en IN_PRODUCTION automatiquement
     if (dto.salesOrderId) {
-      await this.prisma.salesOrder.update({
-        where: { id: dto.salesOrderId },
-        data: { status: 'IN_PRODUCTION' } as any,
-      }).catch(() => { /* commande inexistante ou déjà dans un statut terminal */ });
+      await this.salesOrdersService
+        .updateStatus(dto.salesOrderId, { status: 'IN_PRODUCTION' }, userId)
+        .catch(() => undefined);
     }
 
     if (userId) {
@@ -165,7 +173,11 @@ export class ProductionOrdersService {
 
       const payload: Record<string, unknown> = { ...dto };
       if (dto.orderNumber !== undefined) {
-        const parsed = this.parseProductionOrderNumber(dto.orderNumber);
+        const parsed = this.documentReferenceService.parseReferenceNumber(
+          PRODUCTION_ORDER_PREFIX,
+          dto.orderNumber,
+          'OF',
+        );
         if (linkedOrderLevel !== null && parsed.level !== linkedOrderLevel) {
           throw new BadRequestException(
             `Reference OF invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${linkedOrderLevel}`,
@@ -332,40 +344,5 @@ export class ProductionOrdersService {
       .catch((err) => console.error('Notification error:', err));
 
     return updated;
-  }
-
-  private buildProductionOrderNumber(level: number) {
-    return `${PRODUCTION_ORDER_PREFIX}/${level
-      .toString()
-      .padStart(BUSINESS_DOC_LEVEL_LENGTH, '0')}`;
-  }
-
-  private parseProductionOrderNumber(rawOrderNumber: string) {
-    const normalized = rawOrderNumber.trim().toUpperCase();
-    const regex = new RegExp(
-      `^${PRODUCTION_ORDER_PREFIX}\\/(\\d{${BUSINESS_DOC_LEVEL_LENGTH}})$`,
-    );
-    const match = normalized.match(regex);
-    if (!match) {
-      throw new BadRequestException(
-        `Format OF invalide. Attendu: ${PRODUCTION_ORDER_PREFIX}/${'0'.repeat(BUSINESS_DOC_LEVEL_LENGTH)}`,
-      );
-    }
-
-    return {
-      number: normalized,
-      level: Number(match[1]),
-    };
-  }
-
-  private async allocateNextReferenceLevel(tx: any) {
-    const sequence = await tx.documentSequence.upsert({
-      where: { scope: BUSINESS_DOC_SCOPE },
-      update: { nextValue: { increment: 1 } },
-      create: { scope: BUSINESS_DOC_SCOPE, nextValue: 2 },
-      select: { nextValue: true },
-    });
-
-    return sequence.nextValue - 1;
   }
 }

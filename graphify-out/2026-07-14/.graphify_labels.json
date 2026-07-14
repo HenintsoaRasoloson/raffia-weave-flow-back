@@ -100,13 +100,5 @@
   "98": "INTEGRATION.guide.md",
   "99": "USAGE.md",
   "100": "eslint.config.mjs",
-  "101": "prisma.config.ts",
-  "102": "auth-session.dto.ts",
-  "103": "ReplaceClientFiscalCardDto",
-  "104": "document-reference.module.ts",
-  "105": ".findAll",
-  "106": ".findAll",
-  "107": "Agent Back-End : Architecte NestJS & Clean Code",
-  "108": "Agent Back-QA : Tests NestJS (Jest & Supertest)",
-  "109": "Agent Swagger & Documentation API"
+  "101": "prisma.config.ts"
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanySettingsDto } from './dto/update-company-settings.dto';
+import { DEFAULT_COMPANY_NAME } from './company-settings.constants';
 
 @Injectable()
 export class CompanySettingsService {
@@ -17,7 +18,7 @@ export class CompanySettingsService {
 
     return this.prisma.companySetting.create({
       data: {
-        companyName: 'Atelier Raphia',
+        companyName: DEFAULT_COMPANY_NAME,
       },
     });
   }

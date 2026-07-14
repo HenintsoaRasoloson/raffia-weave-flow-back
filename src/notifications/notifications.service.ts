@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { NotificationsGateway } from './notifications.gateway';
+import type { NotificationType } from './notification.types';
 
 export interface NotificationPayload {
-  type: string; // 'sale_order_created', 'invoice_payment', 'production_completed', etc.
+  type: NotificationType | string;
   title: string;
   message: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   actionUrl?: string;
   priority?: 'low' | 'normal' | 'high';
 }

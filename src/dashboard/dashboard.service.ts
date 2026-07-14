@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SALES_ORDER_IN_PROGRESS_STATUSES } from '../common/domain/sales-order-status.transitions';
+import { FinancialTrackingService } from '../financial-tracking/financial-tracking.service';
 import {
   KpiDto,
   RevenueSeries,
@@ -20,22 +22,47 @@ interface PlanningCalendarQuery {
   types?: string;
 }
 
+const PRODUCTION_ACTIVE_STATUSES = ['PLANNED', 'PREPARATION', 'IN_PROGRESS'] as const;
+const DELIVERY_PENDING_STATUSES = ['PLANNED', 'PREPARING'] as const;
+const INVOICE_PENDING_STATUSES = ['DRAFT', 'ISSUED'] as const;
+const LOW_STOCK_THRESHOLD = 50;
+
+const PRODUCTION_STATUS_LABELS: Record<string, ProductionOrder['status']> = {
+  PLANNED: 'Planifié',
+  PREPARATION: 'Préparation',
+  IN_PROGRESS: 'En cours',
+  COMPLETED: 'Terminé',
+  CANCELLED: 'Terminé',
+};
+
+const SALES_ORDER_STATUS_LABELS: Record<string, string> = {
+  QUOTE: 'Devis',
+  TO_PROCESS: 'À traiter',
+  IN_PRODUCTION: 'En production',
+  PREPARING: 'Préparation',
+  SHIPPED: 'Expédiée',
+  DELIVERED: 'Livrée',
+  INVOICED: 'Facturée',
+  CANCELLED: 'Annulée',
+};
+
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly financialTrackingService: FinancialTrackingService,
+  ) {}
 
-  /**
-   * Obtenir toutes les données du dashboard
-   */
   async getDashboard(days: number = 30): Promise<DashboardDto> {
-    const [kpis, revenueSeries, productionOrders, recentOrders, alerts, quickStats] = await Promise.all([
-      this.getKpis(days),
-      this.getRevenueChart(8),
-      this.getProductionOrders(),
-      this.getRecentOrders(10),
-      this.getAlerts(),
-      this.getQuickStats(),
-    ]);
+    const [kpis, revenueSeries, productionOrders, recentOrders, alerts, quickStats] =
+      await Promise.all([
+        this.getKpis(days),
+        this.getRevenueChart(8),
+        this.getProductionOrders(),
+        this.getRecentOrders(10),
+        this.getAlerts(),
+        this.getQuickStats(),
+      ]);
 
     return {
       kpis,
@@ -47,64 +74,69 @@ export class DashboardService {
     };
   }
 
-  /**
-   * KPIs: CA, commandes en cours, marge, trésorerie
-   */
   async getKpis(days: number = 30): Promise<KpiDto[]> {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    // Récupérer les commandes de vente du mois dernier
-    const orders = await this.prisma.salesOrder.findMany({
-      where: {
-        createdAt: { gte: since },
-      },
-      include: {
-        items: true,
-      },
-    });
-
     const previousSince = new Date(since);
     previousSince.setDate(previousSince.getDate() - days);
 
-    const previousOrders = await this.prisma.salesOrder.findMany({
-      where: {
-        createdAt: {
-          gte: previousSince,
-          lt: since,
-        },
-      },
-      include: {
-        items: true,
-      },
-    });
+    const periodEnd = new Date();
 
-    // Calcul du CA
-    const currentCA = orders.reduce((sum, o) => sum + (o.totalTtc || 0), 0);
-    const previousCA = previousOrders.reduce((sum, o) => sum + (o.totalTtc || 0), 0);
-    const caDelta = previousCA > 0 ? ((currentCA - previousCA) / previousCA * 100).toFixed(1) : 0;
+    const [orders, previousOrders, inProgressOrders, previousInProgress, overview, previousOverview] =
+      await Promise.all([
+        this.prisma.salesOrder.findMany({
+          where: { createdAt: { gte: since } },
+          select: { totalTtc: true },
+        }),
+        this.prisma.salesOrder.findMany({
+          where: {
+            createdAt: { gte: previousSince, lt: since },
+          },
+          select: { totalTtc: true },
+        }),
+        this.prisma.salesOrder.count({
+          where: { status: { in: [...SALES_ORDER_IN_PROGRESS_STATUSES] } },
+        }),
+        this.prisma.salesOrder.count({
+          where: {
+            status: { in: [...SALES_ORDER_IN_PROGRESS_STATUSES] },
+            createdAt: { lt: since },
+          },
+        }),
+        this.financialTrackingService.getOverview({
+          dateFrom: since.toISOString(),
+          dateTo: periodEnd.toISOString(),
+        }),
+        this.financialTrackingService.getOverview({
+          dateFrom: previousSince.toISOString(),
+          dateTo: since.toISOString(),
+        }),
+      ]);
 
-    // Commandes en cours
-    const inProgressOrders = await this.prisma.salesOrder.count({
-      where: {
-        status: { in: ['À traiter', 'En production', 'Expédiée'] },
-      },
-    });
-
-    const previousInProgress = await this.prisma.salesOrder.count({
-      where: {
-        status: { in: ['À traiter', 'En production', 'Expédiée'] },
-        createdAt: { lt: since },
-      },
-    });
+    const currentCA = orders.reduce((sum, order) => sum + Number(order.totalTtc ?? 0), 0);
+    const previousCA = previousOrders.reduce(
+      (sum, order) => sum + Number(order.totalTtc ?? 0),
+      0,
+    );
+    const caDelta =
+      previousCA > 0 ? ((currentCA - previousCA) / previousCA) * 100 : 0;
 
     const ordersDelta = inProgressOrders - previousInProgress;
 
+    const currentMargin = overview.margins.estimatedMarginRate;
+    const previousMargin = previousOverview.margins.estimatedMarginRate;
+    const marginDelta = currentMargin - previousMargin;
+
+    const treasury = overview.treasury.trackedBalance;
+    const previousTreasury = previousOverview.treasury.trackedBalance;
+    const treasuryDelta = treasury - previousTreasury;
+
     return [
       {
-        label: 'Chiffre d\'affaires',
+        label: "Chiffre d'affaires",
         value: `€${(currentCA / 1000).toFixed(1)}k`,
-        delta: `${caDelta > 0 ? '+' : ''}${caDelta}%`,
+        delta: `${caDelta > 0 ? '+' : ''}${caDelta.toFixed(1)}%`,
         trend: caDelta >= 0 ? 'up' : 'down',
         hint: 'vs période précédente',
       },
@@ -117,24 +149,21 @@ export class DashboardService {
       },
       {
         label: 'Marge moyenne',
-        value: '42%',
-        delta: '+2.1%',
-        trend: 'up',
-        hint: 'vs mois dernier',
+        value: `${currentMargin.toFixed(1)}%`,
+        delta: `${marginDelta > 0 ? '+' : ''}${marginDelta.toFixed(1)}%`,
+        trend: marginDelta >= 0 ? 'up' : 'down',
+        hint: 'vs période précédente',
       },
       {
         label: 'Trésorerie',
-        value: '€84k',
-        delta: '+€12.4k',
-        trend: 'up',
+        value: `€${(treasury / 1000).toFixed(1)}k`,
+        delta: `${treasuryDelta >= 0 ? '+' : ''}€${(treasuryDelta / 1000).toFixed(1)}k`,
+        trend: treasuryDelta >= 0 ? 'up' : 'down',
         hint: 'disponible',
       },
     ];
   }
 
-  /**
-   * Graphique: Chiffre d'affaires B2B vs B2C par mois (8 derniers mois)
-   */
   async getRevenueChart(months: number = 8): Promise<RevenueSeries[]> {
     const data: RevenueSeries[] = [];
     const monthNames = [
@@ -146,24 +175,25 @@ export class DashboardService {
       const date = new Date();
       date.setMonth(date.getMonth() - i);
       const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
-      const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+      const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 
       const orders = await this.prisma.salesOrder.findMany({
         where: {
-          createdAt: {
+          orderDate: {
             gte: monthStart,
             lte: monthEnd,
           },
         },
+        select: { orderType: true, totalTtc: true },
       });
 
       const b2b = orders
-        .filter((o) => o.clientType === 'B2B' || o.clientType === 'PROFESSIONNEL')
-        .reduce((sum, o) => sum + (o.totalTtc || 0), 0);
+        .filter((order) => order.orderType === 'B2B')
+        .reduce((sum, order) => sum + Number(order.totalTtc ?? 0), 0);
 
       const b2c = orders
-        .filter((o) => o.clientType === 'B2C' || o.clientType === 'PARTICULIER')
-        .reduce((sum, o) => sum + (o.totalTtc || 0), 0);
+        .filter((order) => order.orderType === 'B2C')
+        .reduce((sum, order) => sum + Number(order.totalTtc ?? 0), 0);
 
       data.push({
         month: monthNames[date.getMonth()],
@@ -175,66 +205,61 @@ export class DashboardService {
     return data;
   }
 
-  /**
-   * Ordres de fabrication en cours (4 premiers)
-   */
   async getProductionOrders(): Promise<ProductionOrder[]> {
     const orders = await this.prisma.productionOrder.findMany({
       where: {
-        status: { in: ['Planifié', 'Préparation', 'En cours'] },
+        status: { in: [...PRODUCTION_ACTIVE_STATUSES] },
       },
+      include: { product: { select: { name: true } } },
       orderBy: { createdAt: 'desc' },
       take: 4,
     });
 
-    return orders.map((o) => ({
-      id: o.id,
-      product: o.productName || `Produit ${o.id.slice(0, 5)}`,
-      qty: o.quantity || 0,
-      status: o.status as 'Planifié' | 'Préparation' | 'En cours' | 'Terminé',
-      progress: this.calculateProgress(o.status),
-      start: o.startDate ? o.startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '-',
-      end: o.endDate ? o.endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '-',
+    return orders.map((order) => ({
+      id: order.id,
+      product: order.product.name,
+      qty: order.quantity,
+      status: PRODUCTION_STATUS_LABELS[String(order.status)] ?? 'En cours',
+      progress: order.progress,
+      start: order.startDate
+        ? order.startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+        : '-',
+      end: order.endDate
+        ? order.endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+        : '-',
     }));
   }
 
-  /**
-   * Dernières commandes (10 dernières)
-   */
   async getRecentOrders(limit: number = 10): Promise<RecentOrder[]> {
     const orders = await this.prisma.salesOrder.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
-        client: true,
+        client: { select: { name: true } },
       },
     });
 
-    return orders.map((o) => ({
-      id: o.orderNumber || o.id.slice(0, 8).toUpperCase(),
-      client: o.client?.name || 'Client inconnu',
-      type: o.clientType === 'B2B' || o.clientType === 'PROFESSIONNEL' ? 'B2B' : 'B2C',
-      date: o.createdAt.toLocaleDateString('fr-FR'),
-      total: `€${(o.totalTtc || 0).toFixed(0)}`,
-      status: o.status || 'À traiter',
+    return orders.map((order) => ({
+      id: order.orderNumber,
+      client: order.client?.name ?? 'Client inconnu',
+      type: order.orderType,
+      date: order.orderDate.toLocaleDateString('fr-FR'),
+      total: `€${Number(order.totalTtc ?? 0).toFixed(0)}`,
+      status: SALES_ORDER_STATUS_LABELS[String(order.status)] ?? String(order.status),
     }));
   }
 
-  /**
-   * Alertes & suggestions
-   */
   async getAlerts(): Promise<Alert[]> {
     const alerts: Alert[] = [];
 
-    // Alerte: Commandes derrière planning
     const behindOrders = await this.prisma.productionOrder.findMany({
       where: {
-        status: { in: ['Planifié', 'Préparation', 'En cours'] },
-        endDate: {
-          lt: new Date(),
-        },
+        status: { in: [...PRODUCTION_ACTIVE_STATUSES] },
+        endDate: { lt: new Date() },
       },
+      orderBy: { endDate: 'asc' },
       take: 1,
+      select: { id: true, orderNumber: true },
     });
 
     if (behindOrders.length > 0) {
@@ -243,64 +268,65 @@ export class DashboardService {
         type: 'warning',
         icon: 'AlertTriangle',
         title: 'Production derrière planning',
-        message: `OF-${behindOrders[0].id.slice(0, 3)} dépasse la date prévue`,
+        message: `${behindOrders[0].orderNumber} dépasse la date prévue`,
       });
     }
 
-    // Suggestion IA
     const lowStockComponents = await this.prisma.component.findMany({
       where: {
-        stock: {
-          lte: 50, // Seuil bas arbitraire
-        },
+        stockQty: { lte: LOW_STOCK_THRESHOLD },
       },
-      orderBy: { stock: 'asc' },
+      orderBy: { stockQty: 'asc' },
       take: 1,
+      select: { name: true, stockQty: true },
     });
 
     if (lowStockComponents.length > 0) {
       alerts.push({
-        id: 'ai-1',
+        id: 'stock-1',
         type: 'info',
         icon: 'Sparkles',
-        title: 'Suggestion IA',
-        message: `Réassortir le ${lowStockComponents[0].name} — rupture probable sous 12 jours.`,
+        title: 'Stock bas',
+        message: `Réassortir ${lowStockComponents[0].name} — stock actuel: ${Number(lowStockComponents[0].stockQty)}.`,
       });
     }
 
-    // Bonne nouvelle
-    const monthCa = await this.prisma.salesOrder.findMany({
-      where: {
-        createdAt: {
-          gte: new Date(new Date().setDate(1)),
-        },
-      },
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const monthOrders = await this.prisma.salesOrder.findMany({
+      where: { orderDate: { gte: monthStart } },
+      select: { totalTtc: true },
     });
 
-    const thisMonthCA = monthCa.reduce((sum, o) => sum + (o.totalTtc || 0), 0);
+    const thisMonthCA = monthOrders.reduce(
+      (sum, order) => sum + Number(order.totalTtc ?? 0),
+      0,
+    );
 
-    if (thisMonthCA > 100000) {
+    if (thisMonthCA > 0) {
       alerts.push({
         id: 'success-1',
         type: 'success',
         icon: 'TrendingUp',
         title: 'Rythme actuel',
-        message: `+14% vs. cible mensuelle`,
+        message: `CA mensuel: €${(thisMonthCA / 1000).toFixed(1)}k`,
       });
     }
 
     return alerts;
   }
 
-  /**
-   * Statistiques rapides (4 cartes)
-   */
   async getQuickStats(): Promise<QuickStat[]> {
     const [catalogCount, deliveryCount, invoiceCount, shareCount] = await Promise.all([
       this.prisma.product.count(),
-      this.prisma.delivery.count({ where: { status: 'En attente' } }),
-      this.prisma.invoice.count({ where: { status: 'Émise' } }),
-      this.prisma.catalogShare.count({ where: { expiresAt: { gt: new Date() } } }),
+      this.prisma.delivery.count({
+        where: { status: { in: [...DELIVERY_PENDING_STATUSES] } },
+      }),
+      this.prisma.invoice.count({
+        where: { status: { in: [...INVOICE_PENDING_STATUSES] } },
+      }),
+      this.prisma.catalogShare.count({
+        where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+      }),
     ]);
 
     return [
@@ -331,9 +357,6 @@ export class DashboardService {
     ];
   }
 
-  /**
-   * Calendrier global du planning (production, livraisons, achats)
-   */
   async getPlanningCalendar(query: PlanningCalendarQuery = {}): Promise<PlanningCalendarResponse> {
     const { from, to } = this.resolvePlanningRange(query.from, query.to);
     const types = this.resolvePlanningTypes(query.types);
@@ -356,24 +379,18 @@ export class DashboardService {
     };
   }
 
-  /**
-   * Helper: Calculer le pourcentage de progression selon le statut
-   */
-  private calculateProgress(status: string): number {
-    const progressMap: Record<string, number> = {
-      'Planifié': 10,
-      'Préparation': 30,
-      'En cours': 65,
-      'Terminé': 100,
-      'Contrôle': 85,
-    };
-    return progressMap[status] || 0;
-  }
-
   private resolvePlanningRange(fromRaw?: string, toRaw?: string) {
     const today = new Date();
     const defaultFrom = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 15);
-    const defaultTo = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 90, 23, 59, 59, 999);
+    const defaultTo = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 90,
+      23,
+      59,
+      59,
+      999,
+    );
 
     const parsedFrom = this.parseDateOnly(fromRaw) ?? defaultFrom;
     const parsedTo = this.parseDateOnly(toRaw, true) ?? defaultTo;

@@ -1,13 +1,13 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
 import { Injectable } from '@nestjs/common';
+import type { AuditAction, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface AuditLogInput {
   entityType: string;
   entityId: string;
-  action: string;
+  action: AuditAction;
   userId: string;
-  changes?: Record<string, { before?: any; after?: any }>;
+  changes?: Prisma.InputJsonValue;
   details?: string;
 }
 
@@ -17,8 +17,7 @@ export class AuditService {
 
   async log(input: AuditLogInput) {
     try {
-      const auditLog = this.prisma as any;
-      return await auditLog.auditLog.create({
+      return await this.prisma.auditLog.create({
         data: {
           entityType: input.entityType,
           entityId: input.entityId,
@@ -35,8 +34,7 @@ export class AuditService {
   }
 
   async getEntityLogs(entityType: string, entityId: string, limit = 50) {
-    const auditLog = this.prisma as any;
-    return await auditLog.auditLog.findMany({
+    return this.prisma.auditLog.findMany({
       where: { entityType, entityId },
       include: {
         user: { select: { id: true, email: true, name: true, role: true } },
@@ -47,8 +45,7 @@ export class AuditService {
   }
 
   async getUserLogs(userId: string, limit = 50) {
-    const auditLog = this.prisma as any;
-    return await auditLog.auditLog.findMany({
+    return this.prisma.auditLog.findMany({
       where: { userId },
       include: { user: { select: { id: true, email: true, name: true } } },
       orderBy: { createdAt: 'desc' },
@@ -59,14 +56,14 @@ export class AuditService {
   async getAllLogs(
     filters?: {
       entityType?: string;
-      action?: string;
+      action?: AuditAction;
       userId?: string;
       startDate?: Date;
       endDate?: Date;
     },
     limit = 100,
   ) {
-    const where: Record<string, any> = {};
+    const where: Prisma.AuditLogWhereInput = {};
     if (filters?.entityType) {
       where.entityType = filters.entityType;
     }
@@ -86,8 +83,7 @@ export class AuditService {
       }
     }
 
-    const auditLog = this.prisma as any;
-    return await auditLog.auditLog.findMany({
+    return this.prisma.auditLog.findMany({
       where,
       include: {
         user: { select: { id: true, email: true, name: true, role: true } },

@@ -2,12 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SalesOrdersService } from '../sales-orders/sales-orders.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 
-const BUSINESS_DOC_SCOPE = 'business-documents';
-const BUSINESS_DOC_LEVEL_LENGTH = 6;
 const DELIVERY_PREFIX = 'LIV';
 
 @Injectable()
@@ -15,6 +15,8 @@ export class DeliveriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly documentReferenceService: DocumentReferenceService,
+    private readonly salesOrdersService: SalesOrdersService,
   ) {}
 
   async findAll(query: ListQueryDto) {
@@ -66,7 +68,7 @@ export class DeliveriesService {
 
       let referenceLevel = salesOrder.referenceLevel;
       if (referenceLevel === null) {
-        referenceLevel = await this.allocateNextReferenceLevel(tx as any);
+        referenceLevel = await this.documentReferenceService.allocateNextReferenceLevel(tx);
         await tx.salesOrder.update({
           where: { id: salesOrder.id },
           data: { referenceLevel },
@@ -75,7 +77,11 @@ export class DeliveriesService {
 
       let deliveryNumber: string;
       if (dto.deliveryNumber?.trim()) {
-        const parsed = this.parseDeliveryNumber(dto.deliveryNumber);
+        const parsed = this.documentReferenceService.parseReferenceNumber(
+          DELIVERY_PREFIX,
+          dto.deliveryNumber,
+          'de livraison',
+        );
         if (parsed.level !== referenceLevel) {
           throw new BadRequestException(
             `Reference livraison invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${referenceLevel}`,
@@ -83,7 +89,10 @@ export class DeliveriesService {
         }
         deliveryNumber = parsed.number;
       } else {
-        deliveryNumber = this.buildDeliveryNumber(referenceLevel);
+        deliveryNumber = this.documentReferenceService.buildReferenceNumber(
+          DELIVERY_PREFIX,
+          referenceLevel,
+        );
       }
 
       const payload: Record<string, unknown> = {
@@ -124,7 +133,11 @@ export class DeliveriesService {
 
       const payload: Record<string, unknown> = { ...dto };
       if (dto.deliveryNumber !== undefined) {
-        const parsed = this.parseDeliveryNumber(dto.deliveryNumber);
+        const parsed = this.documentReferenceService.parseReferenceNumber(
+          DELIVERY_PREFIX,
+          dto.deliveryNumber,
+          'de livraison',
+        );
         if (parsed.level !== salesOrder.referenceLevel) {
           throw new BadRequestException(
             `Reference livraison invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${salesOrder.referenceLevel}`,
@@ -173,10 +186,9 @@ export class DeliveriesService {
 
     // Passer la commande client en DELIVERED automatiquement
     if (delivery.salesOrderId) {
-      await this.prisma.salesOrder.update({
-        where: { id: delivery.salesOrderId },
-        data: { status: 'DELIVERED' } as any,
-      }).catch(() => { /* commande déjà dans un statut terminal */ });
+      await this.salesOrdersService
+        .updateStatus(delivery.salesOrderId, { status: 'DELIVERED' })
+        .catch(() => undefined);
     }
 
     // Notifier tous les rôles concernés
@@ -204,39 +216,5 @@ export class DeliveriesService {
   remove(id: string) {
     return this.prisma.delivery.delete({ where: { id } });
   }
-
-  private buildDeliveryNumber(level: number) {
-    return `${DELIVERY_PREFIX}/${level
-      .toString()
-      .padStart(BUSINESS_DOC_LEVEL_LENGTH, '0')}`;
-  }
-
-  private parseDeliveryNumber(rawDeliveryNumber: string) {
-    const normalized = rawDeliveryNumber.trim().toUpperCase();
-    const regex = new RegExp(
-      `^${DELIVERY_PREFIX}\\/(\\d{${BUSINESS_DOC_LEVEL_LENGTH}})$`,
-    );
-    const match = normalized.match(regex);
-    if (!match) {
-      throw new BadRequestException(
-        `Format de livraison invalide. Attendu: ${DELIVERY_PREFIX}/${'0'.repeat(BUSINESS_DOC_LEVEL_LENGTH)}`,
-      );
-    }
-
-    return {
-      number: normalized,
-      level: Number(match[1]),
-    };
-  }
-
-  private async allocateNextReferenceLevel(tx: any) {
-    const sequence = await tx.documentSequence.upsert({
-      where: { scope: BUSINESS_DOC_SCOPE },
-      update: { nextValue: { increment: 1 } },
-      create: { scope: BUSINESS_DOC_SCOPE, nextValue: 2 },
-      select: { nextValue: true },
-    });
-
-    return sequence.nextValue - 1;
-  }
 }
+

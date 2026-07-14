@@ -9,6 +9,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compression.util';
 import { DEFAULT_GED_BUCKET_ARCHIVE } from '../ged/ged.constants';
 import { GedPathsService } from '../ged/ged-paths.service';
+import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
+import { BUSINESS_DOC_LEVEL_LENGTH } from '../common/document-reference/document-reference.constants';
 import { MinioService } from '../ged/minio.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
@@ -17,8 +19,6 @@ import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 
 const INVOICE_TYPES = ['PROFORMA', 'DEPOSIT', 'INTERMEDIATE', 'FINAL', 'CREDIT_NOTE'] as const;
-const BUSINESS_DOC_SCOPE = 'business-documents';
-const BUSINESS_DOC_LEVEL_LENGTH = 6;
 
 @Injectable()
 export class InvoicesService {
@@ -28,6 +28,7 @@ export class InvoicesService {
     private readonly notificationsService: NotificationsService,
     private readonly minioService: MinioService,
     private readonly gedPathsService: GedPathsService,
+    private readonly documentReferenceService: DocumentReferenceService,
   ) {}
 
   async findAll(query: ListQueryDto) {
@@ -312,7 +313,7 @@ export class InvoicesService {
 
         referenceLevel = salesOrder.referenceLevel;
         if (referenceLevel === null) {
-          referenceLevel = await this.allocateNextReferenceLevel(tx as any);
+          referenceLevel = await this.documentReferenceService.allocateNextReferenceLevel(tx);
           await tx.salesOrder.update({
             where: { id: salesOrder.id },
             data: { referenceLevel },
@@ -332,7 +333,7 @@ export class InvoicesService {
         referenceLevel = referenceLevel ?? parsed.level;
         invoiceNumber = parsed.number;
       } else {
-        referenceLevel = referenceLevel ?? (await this.allocateNextReferenceLevel(tx as any));
+        referenceLevel = referenceLevel ?? (await this.documentReferenceService.allocateNextReferenceLevel(tx));
         invoiceNumber = this.buildInvoiceNumber(referenceLevel, normalizedType);
       }
 
@@ -791,17 +792,6 @@ export class InvoicesService {
       number: normalized,
       level: Number(match[1]),
     };
-  }
-
-  private async allocateNextReferenceLevel(tx: any) {
-    const sequence = await tx.documentSequence.upsert({
-      where: { scope: BUSINESS_DOC_SCOPE },
-      update: { nextValue: { increment: 1 } },
-      create: { scope: BUSINESS_DOC_SCOPE, nextValue: 2 },
-      select: { nextValue: true },
-    });
-
-    return sequence.nextValue - 1;
   }
 
   private async ensureInvoiceExists(invoiceId: string) {
