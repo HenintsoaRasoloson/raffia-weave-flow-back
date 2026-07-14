@@ -24,3 +24,7 @@ src/generated/prisma/
 .DS_Store
 Thumbs.db
 .vscode/
+
+
+#graphify
+/graphify-out/
