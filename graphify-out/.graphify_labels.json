@@ -113,8 +113,5 @@
   "111": "UpsertInvoiceTemplateDto",
   "112": "CatalogShareProductResponseDto",
   "113": "bom-items.controller.ts",
-  "114": "deliveries.controller.ts",
-  "115": "ClientResponseDto",
-  "116": "SupplierResponseDto",
-  "117": "users.module.ts"
+  "114": "deliveries.controller.ts"
 }

@@ -15,8 +15,8 @@
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1783587133.9752443,
-    "ast_hash": "87ed8393c245a8d5edc3a85357e9d6db",
+    "mtime": 1784018723.573157,
+    "ast_hash": "99eafb0ac826648da56804302f389f03",
     "semantic_hash": ""
   },
   "prisma.config.ts": {
@@ -220,8 +220,8 @@
     "semantic_hash": ""
   },
   "src/bom-items/bom-items.service.spec.ts": {
-    "mtime": 1783578231.388507,
-    "ast_hash": "1519452a68239ee7f781c5a7f0769a31",
+    "mtime": 1784018532.7291508,
+    "ast_hash": "8499a05170a75c106bb0db7c729280ac",
     "semantic_hash": ""
   },
   "src/bom-items/bom-items.service.ts": {
@@ -245,8 +245,8 @@
     "semantic_hash": ""
   },
   "src/catalog-shares/catalog-shares.controller.ts": {
-    "mtime": 1783522787.991192,
-    "ast_hash": "a836655d2b4fd228e86e090c23a87f5a",
+    "mtime": 1784019221.1948125,
+    "ast_hash": "746eb81ebdff398e64d439cd7f7ee743",
     "semantic_hash": ""
   },
   "src/catalog-shares/catalog-shares.module.ts": {
@@ -255,8 +255,8 @@
     "semantic_hash": ""
   },
   "src/catalog-shares/catalog-shares.service.ts": {
-    "mtime": 1784017937.182323,
-    "ast_hash": "660b3779c7be3abc21b9c3db0a84d9b9",
+    "mtime": 1784019221.077954,
+    "ast_hash": "0d725dfdea9d503a0f4ca1281bc08dc9",
     "semantic_hash": ""
   },
   "src/catalog-shares/dto/catalog-share-product-response.dto.ts": {
@@ -265,13 +265,13 @@
     "semantic_hash": ""
   },
   "src/catalog-shares/dto/catalog-share-response.dto.ts": {
-    "mtime": 1783522668.0234525,
-    "ast_hash": "02681433182be5b1c8cbd0f7fc769386",
+    "mtime": 1784019200.6716247,
+    "ast_hash": "ac1b67d2a264c1f823832ffd3f35650c",
     "semantic_hash": ""
   },
   "src/catalog-shares/dto/create-catalog-share.dto.ts": {
-    "mtime": 1783522908.1500015,
-    "ast_hash": "84d23de1d9cec142ab5b42564e2ee8f4",
+    "mtime": 1784019199.0669563,
+    "ast_hash": "40e5ce425bd07949d446198509c0030a",
     "semantic_hash": ""
   },
   "src/catalog-shares/dto/replace-catalog-share-products.dto.ts": {
@@ -280,8 +280,8 @@
     "semantic_hash": ""
   },
   "src/catalog-shares/dto/update-catalog-share.dto.ts": {
-    "mtime": 1783522668.0234525,
-    "ast_hash": "8a39ad1b29699e8b269c15907716eac7",
+    "mtime": 1784019200.6473513,
+    "ast_hash": "a4c2e938d4a2bf4c46a8e10e0f7208ea",
     "semantic_hash": ""
   },
   "src/categories/categories.controller.ts": {
@@ -400,8 +400,8 @@
     "semantic_hash": ""
   },
   "src/components/components.service.spec.ts": {
-    "mtime": 1783578586.136763,
-    "ast_hash": "ea0564d7ee618da1008355342983a88e",
+    "mtime": 1784018535.88134,
+    "ast_hash": "32b15ec44fb7e937c2e20214e79af2a6",
     "semantic_hash": ""
   },
   "src/components/components.service.ts": {
@@ -455,8 +455,8 @@
     "semantic_hash": ""
   },
   "src/deliveries/deliveries.service.ts": {
-    "mtime": 1784017842.1361122,
-    "ast_hash": "220bbce18a6739c6005253bca4768c9d",
+    "mtime": 1784018098.8730433,
+    "ast_hash": "d2a6d0df6e291f9d99b10124e2334097",
     "semantic_hash": ""
   },
   "src/deliveries/dto/create-delivery.dto.ts": {
@@ -665,8 +665,8 @@
     "semantic_hash": ""
   },
   "src/production-orders/production-orders.service.ts": {
-    "mtime": 1784017834.2839215,
-    "ast_hash": "2b3398490b871057dca5e054df27b2d7",
+    "mtime": 1784018135.9664345,
+    "ast_hash": "65a93caaa7862b5762d646c35100fae2",
     "semantic_hash": ""
   },
   "src/products/dto/create-product.dto.ts": {
@@ -745,13 +745,13 @@
     "semantic_hash": ""
   },
   "src/purchase-orders/purchase-orders.service.spec.ts": {
-    "mtime": 1783593921.9695237,
-    "ast_hash": "31e2c4da458a1d2a19287cadfa6a91b6",
+    "mtime": 1784018530.1981013,
+    "ast_hash": "8cc6c7b4d1870f654af78f8a328e465d",
     "semantic_hash": ""
   },
   "src/purchase-orders/purchase-orders.service.ts": {
-    "mtime": 1784018023.7913923,
-    "ast_hash": "124ef4a20a5616c38f5c7fc9ecf32fa8",
+    "mtime": 1784018099.878103,
+    "ast_hash": "7c1220bcf606bf24c95489272468cf61",
     "semantic_hash": ""
   },
   "src/reference-lookup/dto/reference-lookup-query.dto.ts": {
@@ -860,8 +860,8 @@
     "semantic_hash": ""
   },
   "src/suppliers/suppliers.service.spec.ts": {
-    "mtime": 1783578329.6323621,
-    "ast_hash": "cf090dc4f0bb610ce9812f13c806f017",
+    "mtime": 1784018535.684266,
+    "ast_hash": "b17aa71c1e01ed23ec75aa0986336e1e",
     "semantic_hash": ""
   },
   "src/suppliers/suppliers.service.ts": {
@@ -875,8 +875,8 @@
     "semantic_hash": ""
   },
   "test/jest-e2e.json": {
-    "mtime": 1783515427.1815152,
-    "ast_hash": "707a50895cb1c565825637916e9cf290",
+    "mtime": 1784018717.9119267,
+    "ast_hash": "3b5cd3291e30ec4892d90b5aa7a75223",
     "semantic_hash": ""
   },
   "tsconfig.build.json": {
@@ -1127,6 +1127,16 @@
   "src/common/prisma/enum-filter.util.ts": {
     "mtime": 1784017809.8838255,
     "ast_hash": "08cc36c52abf66e70b283cd1c6ec07f3",
+    "semantic_hash": ""
+  },
+  "prisma/migrations/20260714120000_add_catalog_share_max_view_count/migration.sql": {
+    "mtime": 1784019193.6914015,
+    "ast_hash": "784d147d28537774b1920f48387b01ed",
+    "semantic_hash": ""
+  },
+  "test/mocks/prisma-client.ts": {
+    "mtime": 1784018657.7231083,
+    "ast_hash": "0cb9a8c7a66260e8a55f51045f741d05",
     "semantic_hash": ""
   }
 }

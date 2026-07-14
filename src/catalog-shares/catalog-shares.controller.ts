@@ -104,4 +104,17 @@ export class CatalogSharesController {
   ) {
     return this.catalogSharesService.removeProduct(id, productId);
   }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Supprimer un catalogue partagé',
+    description:
+      'Autorisé uniquement si le statut n’est pas ACTIVE (EXPIRED ou REVOKED).',
+  })
+  @ApiOkResponse({ description: 'Catalogue partagé supprimé' })
+  remove(@Param('id') id: string) {
+    return this.catalogSharesService.remove(id);
+  }
 }

@@ -95,6 +95,7 @@ export class CatalogSharesService {
         clientId: dto.clientId ?? null,
         status: dto.status ?? CatalogShareStatus.ACTIVE,
         expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+        maxViewCount: dto.maxViewCount ?? null,
         products: productIds.length
           ? {
               create: productIds.map((productId) => ({ productId })),
@@ -117,6 +118,7 @@ export class CatalogSharesService {
         ...(dto.expiresAt !== undefined
           ? { expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null }
           : {}),
+        ...(dto.maxViewCount !== undefined ? { maxViewCount: dto.maxViewCount } : {}),
         ...(dto.status ? { status: dto.status } : {}),
       },
       include: {
@@ -165,6 +167,29 @@ export class CatalogSharesService {
     return { message: 'Product removed from catalog share.' };
   }
 
+  async remove(id: string): Promise<{ message: string }> {
+    const share = await this.prisma.catalogShare.findUnique({ where: { id } });
+
+    if (!share) {
+      throw new NotFoundException('Catalog share not found.');
+    }
+
+    if (share.status === CatalogShareStatus.ACTIVE) {
+      throw new BadRequestException(
+        'Cannot delete an active catalog share. Revoke or expire it first.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.catalogShareProduct.deleteMany({
+        where: { catalogShareId: id },
+      });
+      await tx.catalogShare.delete({ where: { id } });
+    });
+
+    return { message: 'Catalog share deleted.' };
+  }
+
   async getPublicByToken(token: string): Promise<CatalogShareWithPublicProducts> {
     const share = await this.prisma.catalogShare.findUnique({
       where: { token },
@@ -180,12 +205,21 @@ export class CatalogSharesService {
       throw new NotFoundException('Catalog share not found.');
     }
 
-    if (share.status !== 'ACTIVE') {
+    if (share.status !== CatalogShareStatus.ACTIVE) {
       throw new BadRequestException('Catalog share is not active.');
     }
 
     if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
       throw new BadRequestException('Catalog share has expired.');
+    }
+
+    if (
+      share.maxViewCount !== null &&
+      share.viewCount >= share.maxViewCount
+    ) {
+      throw new BadRequestException(
+        'Catalog share has reached its maximum number of views.',
+      );
     }
 
     await this.prisma.catalogShare.update({

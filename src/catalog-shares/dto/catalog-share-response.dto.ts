@@ -22,6 +22,13 @@ export class CatalogShareResponseDto {
   @ApiProperty({ required: false, nullable: true })
   expiresAt: Date | null;
 
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Limite de consultations publiques (null = illimité)',
+  })
+  maxViewCount: number | null;
+
   @ApiProperty()
   viewCount: number;
 

@@ -892,6 +892,7 @@ model CatalogShare {
   client       Client?             @relation(fields: [clientId], references: [id])
   status       CatalogShareStatus  @default(ACTIVE)
   expiresAt    DateTime?
+  maxViewCount Int?
   viewCount    Int                 @default(0)
   lastViewedAt DateTime?
   products     CatalogShareProduct[]
