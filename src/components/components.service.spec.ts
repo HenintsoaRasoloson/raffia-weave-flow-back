@@ -19,6 +19,7 @@ describe('ComponentsService', () => {
 
     const prisma = {
       $transaction: jest.fn(<T>(cb: (trx: typeof tx) => T): T => cb(tx)),
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'cmp-1' }]),
     } as unknown as PrismaService;
 
     const service = new ComponentsService(prisma);
