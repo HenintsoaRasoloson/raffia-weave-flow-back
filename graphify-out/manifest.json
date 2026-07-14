@@ -310,8 +310,8 @@
     "semantic_hash": ""
   },
   "src/clients/clients.controller.ts": {
-    "mtime": 1783591273.5297773,
-    "ast_hash": "588a0bcffb79b8f89b261a9f07d0f166",
+    "mtime": 1784030841.449069,
+    "ast_hash": "0a89aebac457ffcd6b499f6d12289f7c",
     "semantic_hash": ""
   },
   "src/clients/clients.module.ts": {
@@ -320,18 +320,18 @@
     "semantic_hash": ""
   },
   "src/clients/clients.service.ts": {
-    "mtime": 1784017926.2049437,
-    "ast_hash": "99b3a1d6f7a7198521c28c1668faaf60",
+    "mtime": 1784030835.9639573,
+    "ast_hash": "3ea0b40b938945b0c2ad15cd19bf3585",
     "semantic_hash": ""
   },
   "src/clients/dto/client-response.dto.ts": {
-    "mtime": 1783519580.9175448,
-    "ast_hash": "35f8597412004bd9a2c3a455ccb7e2b5",
+    "mtime": 1784030804.33376,
+    "ast_hash": "7100aa4d7718a90c7bad3545abda9f1f",
     "semantic_hash": ""
   },
   "src/clients/dto/create-client.dto.ts": {
-    "mtime": 1783519088.2961955,
-    "ast_hash": "b0689546779337fbc338cbcf0e695d00",
+    "mtime": 1784030830.5758111,
+    "ast_hash": "cef50f9e2d4af2ed97fe54ba1f67d510",
     "semantic_hash": ""
   },
   "src/clients/dto/replace-client-fiscal-card.dto.ts": {
@@ -775,8 +775,8 @@
     "semantic_hash": ""
   },
   "src/sales-orders/dto/create-sales-order.dto.ts": {
-    "mtime": 1783593671.1187336,
-    "ast_hash": "b9a317ef020955fb24a622f8b9aaf6d8",
+    "mtime": 1784030850.1984887,
+    "ast_hash": "4d6b488dcdb52310018a629865364185",
     "semantic_hash": ""
   },
   "src/sales-orders/dto/sales-order-response.dto.ts": {
@@ -810,8 +810,8 @@
     "semantic_hash": ""
   },
   "src/sales-orders/sales-orders.service.ts": {
-    "mtime": 1784018023.4995134,
-    "ast_hash": "f74ff6de73cf462805f7a891188643b7",
+    "mtime": 1784030885.7285812,
+    "ast_hash": "9a493248cc14e045c1637860ef421039",
     "semantic_hash": ""
   },
   "src/search/dto/global-search-query.dto.ts": {
@@ -1162,6 +1162,31 @@
   "src/production-orders/production-orders.service.spec.ts": {
     "mtime": 1784024655.2188141,
     "ast_hash": "0408b91160b3d25f48fcac0428b395e2",
+    "semantic_hash": ""
+  },
+  "prisma/migrations/20260714150000_client_legal_form_and_variant_prices/migration.sql": {
+    "mtime": 1784030792.9437249,
+    "ast_hash": "3db8c80a41009cac92c49c3974a87343",
+    "semantic_hash": ""
+  },
+  "src/clients/clients.service.spec.ts": {
+    "mtime": 1784030955.3666058,
+    "ast_hash": "838329fd9749bd5fae6de0d42ca96b4e",
+    "semantic_hash": ""
+  },
+  "src/clients/dto/resolve-client-price-query.dto.ts": {
+    "mtime": 1784030805.472129,
+    "ast_hash": "06289e616595349fd7232119cb04c9f7",
+    "semantic_hash": ""
+  },
+  "src/clients/dto/upsert-client-variant-prices.dto.ts": {
+    "mtime": 1784030805.4650264,
+    "ast_hash": "a30f8ecf2d99b90873fa6b1eea71256d",
+    "semantic_hash": ""
+  },
+  "src/sales-orders/sales-orders.service.spec.ts": {
+    "mtime": 1784030955.37761,
+    "ast_hash": "f8cc6b8263ff7caaf1d8ce1d75cb3536",
     "semantic_hash": ""
   }
 }

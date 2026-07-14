@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Res,
   StreamableFile,
@@ -35,8 +36,13 @@ import { ClientsService } from './clients.service';
 import { ClientResponseDto } from './dto/client-response.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { ReplaceClientFiscalCardDto } from './dto/replace-client-fiscal-card.dto';
+import { ResolveClientPriceQueryDto } from './dto/resolve-client-price-query.dto';
 import { UploadClientFiscalCardDto } from './dto/upload-client-fiscal-card.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
+import {
+  ClientVariantPriceResponseDto,
+  UpsertClientVariantPricesDto,
+} from './dto/upsert-client-variant-prices.dto';
 
 @ApiTags('Clients')
 @UseGuards(JwtAuthGuard)
@@ -64,6 +70,57 @@ export class ClientsController {
   @ApiOkResponse({ description: 'Cartes fiscales du client' })
   listFiscalCards(@Param('id') id: string) {
     return this.clientsService.listFiscalCards(id);
+  }
+
+  @Get(':id/prices')
+  @ApiOperation({
+    summary: 'Lister les accords tarifaires B2B (prix par variante)',
+  })
+  @ApiOkResponse({
+    description: 'Accords tarifaires du client',
+    type: [ClientVariantPriceResponseDto],
+  })
+  listVariantPrices(@Param('id') id: string) {
+    return this.clientsService.listVariantPrices(id);
+  }
+
+  @Get(':id/prices/resolve')
+  @ApiOperation({
+    summary: 'Resoudre le prix applicable (catalogue B2C ou accord B2B)',
+  })
+  @ApiOkResponse({ description: 'Prix resolu pour une variante' })
+  resolvePrice(
+    @Param('id') id: string,
+    @Query() query: ResolveClientPriceQueryDto,
+  ) {
+    return this.clientsService.resolvePrice(id, query.variantId, query.productId);
+  }
+
+  @Put(':id/prices')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Creer / mettre a jour des accords tarifaires B2B par variante',
+  })
+  @ApiOkResponse({
+    description: 'Accords tarifaires mis a jour',
+    type: [ClientVariantPriceResponseDto],
+  })
+  upsertVariantPrices(
+    @Param('id') id: string,
+    @Body() dto: UpsertClientVariantPricesDto,
+  ) {
+    return this.clientsService.upsertVariantPrices(id, dto);
+  }
+
+  @Delete(':id/prices/:priceId')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Supprimer un accord tarifaire' })
+  @ApiOkResponse({ description: 'Accord tarifaire supprime' })
+  removeVariantPrice(
+    @Param('id') id: string,
+    @Param('priceId') priceId: string,
+  ) {
+    return this.clientsService.removeVariantPrice(id, priceId);
   }
 
   @Post(':id/fiscal-cards')

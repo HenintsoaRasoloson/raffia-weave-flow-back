@@ -23,10 +23,15 @@ export class CreateSalesOrderItemDto {
   @Min(1)
   quantity!: number;
 
-  @ApiProperty({ example: 89 })
+  @ApiPropertyOptional({
+    example: 89,
+    description:
+      'Prix HT manuel. Si omis: B2C = prix catalogue, B2B = accord variante (sinon erreur: fournir ce champ).',
+  })
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  unitPriceHt!: number;
+  unitPriceHt?: number;
 
   @ApiPropertyOptional({ example: 20 })
   @IsOptional()
@@ -59,9 +64,15 @@ export class CreateSalesOrderDto {
   @IsString()
   clientId!: string;
 
-  @ApiProperty({ example: 'B2B', enum: ['B2B', 'B2C'] })
+  @ApiPropertyOptional({
+    example: 'B2B',
+    enum: ['B2B', 'B2C'],
+    description:
+      'Si omis, deduit du type du client. Si fourni, doit correspondre au type client.',
+  })
+  @IsOptional()
   @IsIn(['B2B', 'B2C'])
-  orderType!: 'B2B' | 'B2C';
+  orderType?: 'B2B' | 'B2C';
 
   @ApiPropertyOptional({ example: 'TO_PROCESS', enum: ['QUOTE', 'TO_PROCESS', 'IN_PRODUCTION', 'PREPARING', 'SHIPPED', 'DELIVERED', 'INVOICED', 'CANCELLED'] })
   @IsOptional()

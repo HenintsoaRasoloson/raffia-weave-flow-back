@@ -18,7 +18,7 @@ import { GedPathsService } from '../ged/ged-paths.service';
 import { MinioService } from '../ged/minio.service';
 import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
 import { SALES_ORDER_STATUS_TRANSITIONS } from '../common/domain/sales-order-status.transitions';
-import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
+import { CreateSalesOrderDto, CreateSalesOrderItemDto } from './dto/create-sales-order.dto';
 import { UploadBatDocumentDto } from './dto/upload-bat-document.dto';
 import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
 import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
@@ -250,7 +250,29 @@ export class SalesOrdersService {
   async create(dto: CreateSalesOrderDto, userId?: string) {
     const taxRate = dto.taxRate ?? 20;
     const items = dto.items ?? [];
-    const totalHt = items.reduce(
+
+    const client = await this.prisma.client.findUnique({
+      where: { id: dto.clientId },
+      select: { id: true, type: true },
+    });
+    if (!client) {
+      throw new NotFoundException('Client introuvable');
+    }
+
+    const orderType = dto.orderType ?? client.type;
+    if (dto.orderType && dto.orderType !== client.type) {
+      throw new BadRequestException(
+        `orderType (${dto.orderType}) incompatible avec le type client (${client.type})`,
+      );
+    }
+
+    const resolvedItems = await this.resolveOrderItemPrices({
+      clientId: client.id,
+      orderType,
+      items,
+    });
+
+    const totalHt = resolvedItems.reduce(
       (sum, item) => sum + item.quantity * item.unitPriceHt,
       0,
     );
@@ -281,7 +303,7 @@ export class SalesOrdersService {
           orderNumber,
           referenceLevel,
           clientId: dto.clientId,
-          orderType: dto.orderType,
+          orderType,
           status: dto.status ?? SalesOrderStatus.TO_PROCESS,
           orderDate: new Date(dto.orderDate),
           taxRate,
@@ -291,7 +313,7 @@ export class SalesOrdersService {
           notes: dto.notes,
           batRequired: dto.batRequired ?? false,
           items: {
-            create: items.map((item) => {
+            create: resolvedItems.map((item) => {
               const lineTotalHt = item.quantity * item.unitPriceHt;
               return {
                 referenceLevel,
@@ -319,6 +341,7 @@ export class SalesOrdersService {
         changes: {
           orderNumber: { after: created.orderNumber },
           status: { after: dto.status ?? 'TO_PROCESS' },
+          orderType: { after: orderType },
           totalTtc: { after: totalTtc },
         },
       });
@@ -502,6 +525,103 @@ export class SalesOrdersService {
 
   remove(id: string) {
     return this.prisma.salesOrder.delete({ where: { id } });
+  }
+
+  private async resolveOrderItemPrices(input: {
+    clientId: string;
+    orderType: 'B2B' | 'B2C';
+    items: CreateSalesOrderItemDto[];
+  }): Promise<
+    Array<CreateSalesOrderItemDto & { unitPriceHt: number }>
+  > {
+    const resolved: Array<CreateSalesOrderItemDto & { unitPriceHt: number }> = [];
+
+    for (const item of input.items) {
+      if (item.unitPriceHt !== undefined && item.unitPriceHt !== null) {
+        resolved.push({ ...item, unitPriceHt: item.unitPriceHt });
+        continue;
+      }
+
+      if (!item.variantId && !item.productId) {
+        throw new BadRequestException(
+          `Ligne "${item.description}": fournir unitPriceHt ou productId/variantId`,
+        );
+      }
+
+      if (input.orderType === 'B2C') {
+        const catalogPrice = await this.resolveCatalogPrice(
+          item.productId,
+          item.variantId,
+        );
+        resolved.push({ ...item, unitPriceHt: catalogPrice });
+        continue;
+      }
+
+      // B2B: accord variante obligatoire, sinon prix manuel requis
+      if (!item.variantId) {
+        throw new BadRequestException(
+          `Ligne "${item.description}": B2B sans prix manuel requiert variantId (accord tarifaire)`,
+        );
+      }
+
+      const agreement = await this.prisma.clientVariantPrice.findUnique({
+        where: {
+          clientId_variantId: {
+            clientId: input.clientId,
+            variantId: item.variantId,
+          },
+        },
+        select: { agreedPriceHt: true },
+      });
+
+      if (!agreement) {
+        throw new BadRequestException(
+          `Ligne "${item.description}": aucun accord tarifaire B2B pour cette variante. Fournir unitPriceHt manuellement.`,
+        );
+      }
+
+      resolved.push({ ...item, unitPriceHt: Number(agreement.agreedPriceHt) });
+    }
+
+    return resolved;
+  }
+
+  private async resolveCatalogPrice(
+    productId?: string,
+    variantId?: string,
+  ): Promise<number> {
+    if (variantId) {
+      const variant = await this.prisma.productVariant.findUnique({
+        where: { id: variantId },
+        select: {
+          priceOverride: true,
+          productId: true,
+          product: { select: { basePrice: true } },
+        },
+      });
+      if (!variant) {
+        throw new NotFoundException(`Variante introuvable: ${variantId}`);
+      }
+      if (productId && variant.productId !== productId) {
+        throw new BadRequestException(
+          `Variante ${variantId} incompatible avec productId ${productId}`,
+        );
+      }
+      return Number(variant.priceOverride ?? variant.product.basePrice);
+    }
+
+    if (!productId) {
+      throw new BadRequestException('productId ou variantId requis');
+    }
+
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { basePrice: true },
+    });
+    if (!product) {
+      throw new NotFoundException(`Produit introuvable: ${productId}`);
+    }
+    return Number(product.basePrice);
   }
 
   private async ensureSalesOrderExists(salesOrderId: string) {

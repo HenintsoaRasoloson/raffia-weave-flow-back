@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UploadClientFiscalCardDto } from './dto/upload-client-fiscal-card.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
+import { UpsertClientVariantPricesDto } from './dto/upsert-client-variant-prices.dto';
 
 @Injectable()
 export class ClientsService {
@@ -239,13 +240,20 @@ export class ClientsService {
   }
 
   create(dto: CreateClientDto) {
+    const legalForm = dto.legalForm ?? 'INDIVIDUAL';
+    this.assertCompanyRequirements(legalForm, dto);
+
     return this.prisma.client.create({
       data: {
         name: dto.name,
         type: dto.type,
+        legalForm,
         status: dto.status,
         email: dto.email,
+        phone: dto.phone,
         contactName: dto.contactName,
+        nif: dto.nif,
+        stat: dto.stat,
         siret: dto.siret,
         addressLine: dto.addressLine,
         city: dto.city,
@@ -255,15 +263,46 @@ export class ClientsService {
     });
   }
 
-  update(id: string, dto: UpdateClientDto) {
+  async update(id: string, dto: UpdateClientDto) {
+    const current = await this.prisma.client.findUnique({
+      where: { id },
+      select: {
+        legalForm: true,
+        email: true,
+        phone: true,
+        contactName: true,
+        nif: true,
+        stat: true,
+      },
+    });
+    if (!current) {
+      throw new NotFoundException('Client introuvable');
+    }
+
+    const legalForm = dto.legalForm ?? current.legalForm;
+    this.assertCompanyRequirements(legalForm, {
+      email: dto.email !== undefined ? dto.email : current.email ?? undefined,
+      phone: dto.phone !== undefined ? dto.phone : current.phone ?? undefined,
+      contactName:
+        dto.contactName !== undefined
+          ? dto.contactName
+          : current.contactName ?? undefined,
+      nif: dto.nif !== undefined ? dto.nif : current.nif ?? undefined,
+      stat: dto.stat !== undefined ? dto.stat : current.stat ?? undefined,
+    });
+
     return this.prisma.client.update({
       where: { id },
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.type !== undefined ? { type: dto.type } : {}),
+        ...(dto.legalForm !== undefined ? { legalForm: dto.legalForm } : {}),
         ...(dto.status !== undefined ? { status: dto.status } : {}),
         ...(dto.email !== undefined ? { email: dto.email } : {}),
+        ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
         ...(dto.contactName !== undefined ? { contactName: dto.contactName } : {}),
+        ...(dto.nif !== undefined ? { nif: dto.nif } : {}),
+        ...(dto.stat !== undefined ? { stat: dto.stat } : {}),
         ...(dto.siret !== undefined ? { siret: dto.siret } : {}),
         ...(dto.addressLine !== undefined ? { addressLine: dto.addressLine } : {}),
         ...(dto.city !== undefined ? { city: dto.city } : {}),
@@ -273,8 +312,210 @@ export class ClientsService {
     });
   }
 
+  async listVariantPrices(clientId: string) {
+    await this.ensureClientExists(clientId);
+    const items = await this.prisma.clientVariantPrice.findMany({
+      where: { clientId },
+      include: {
+        product: { select: { id: true, ref: true, name: true, basePrice: true } },
+        variant: {
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            size: true,
+            priceOverride: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return items.map((item) => ({
+      ...item,
+      agreedPriceHt: Number(item.agreedPriceHt),
+    }));
+  }
+
+  async upsertVariantPrices(clientId: string, dto: UpsertClientVariantPricesDto) {
+    const client = await this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { id: true, type: true },
+    });
+    if (!client) {
+      throw new NotFoundException('Client introuvable');
+    }
+    if (client.type !== 'B2B') {
+      throw new BadRequestException(
+        'Les accords tarifaires sont reserves aux clients B2B.',
+      );
+    }
+
+    const variantIds = dto.prices.map((p) => p.variantId);
+    const variants = await this.prisma.productVariant.findMany({
+      where: { id: { in: variantIds } },
+      select: { id: true, productId: true },
+    });
+    const variantById = new Map(variants.map((v) => [v.id, v]));
+
+    for (const price of dto.prices) {
+      const variant = variantById.get(price.variantId);
+      if (!variant) {
+        throw new BadRequestException(`Variante introuvable: ${price.variantId}`);
+      }
+      if (variant.productId !== price.productId) {
+        throw new BadRequestException(
+          `La variante ${price.variantId} n appartient pas au produit ${price.productId}`,
+        );
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const price of dto.prices) {
+        await tx.clientVariantPrice.upsert({
+          where: {
+            clientId_variantId: {
+              clientId,
+              variantId: price.variantId,
+            },
+          },
+          create: {
+            clientId,
+            productId: price.productId,
+            variantId: price.variantId,
+            agreedPriceHt: price.agreedPriceHt,
+            notes: price.notes,
+          },
+          update: {
+            productId: price.productId,
+            agreedPriceHt: price.agreedPriceHt,
+            ...(price.notes !== undefined ? { notes: price.notes } : {}),
+          },
+        });
+      }
+    });
+
+    return this.listVariantPrices(clientId);
+  }
+
+  async removeVariantPrice(clientId: string, priceId: string) {
+    const existing = await this.prisma.clientVariantPrice.findFirst({
+      where: { id: priceId, clientId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Accord tarifaire introuvable');
+    }
+    await this.prisma.clientVariantPrice.delete({ where: { id: priceId } });
+    return { id: priceId, deleted: true };
+  }
+
+  async resolvePrice(clientId: string, variantId: string, productId?: string) {
+    const client = await this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { id: true, type: true },
+    });
+    if (!client) {
+      throw new NotFoundException('Client introuvable');
+    }
+
+    const variant = await this.prisma.productVariant.findUnique({
+      where: { id: variantId },
+      select: {
+        id: true,
+        productId: true,
+        priceOverride: true,
+        product: { select: { id: true, basePrice: true, name: true, ref: true } },
+      },
+    });
+    if (!variant) {
+      throw new NotFoundException('Variante introuvable');
+    }
+    if (productId && variant.productId !== productId) {
+      throw new BadRequestException(
+        'productId incompatible avec la variante fournie',
+      );
+    }
+
+    const catalogPrice = Number(variant.priceOverride ?? variant.product.basePrice);
+
+    if (client.type === 'B2C') {
+      return {
+        clientId,
+        clientType: client.type,
+        source: 'CATALOG' as const,
+        productId: variant.productId,
+        variantId: variant.id,
+        unitPriceHt: catalogPrice,
+        catalogPriceHt: catalogPrice,
+        agreedPriceHt: null,
+      };
+    }
+
+    const agreement = await this.prisma.clientVariantPrice.findUnique({
+      where: {
+        clientId_variantId: { clientId, variantId: variant.id },
+      },
+      select: { agreedPriceHt: true },
+    });
+
+    if (agreement) {
+      return {
+        clientId,
+        clientType: client.type,
+        source: 'AGREEMENT' as const,
+        productId: variant.productId,
+        variantId: variant.id,
+        unitPriceHt: Number(agreement.agreedPriceHt),
+        catalogPriceHt: catalogPrice,
+        agreedPriceHt: Number(agreement.agreedPriceHt),
+      };
+    }
+
+    return {
+      clientId,
+      clientType: client.type,
+      source: 'MANUAL_REQUIRED' as const,
+      productId: variant.productId,
+      variantId: variant.id,
+      unitPriceHt: null,
+      catalogPriceHt: catalogPrice,
+      agreedPriceHt: null,
+      message:
+        'Aucun accord tarifaire pour cette variante. Fournir unitPriceHt manuellement.',
+    };
+  }
+
   remove(id: string) {
     return this.prisma.client.delete({ where: { id } });
+  }
+
+  private assertCompanyRequirements(
+    legalForm: string,
+    fields: {
+      email?: string | null;
+      phone?: string | null;
+      contactName?: string | null;
+      nif?: string | null;
+      stat?: string | null;
+    },
+  ) {
+    if (legalForm !== 'COMPANY') {
+      return;
+    }
+
+    const missing: string[] = [];
+    if (!fields.nif?.trim()) missing.push('nif');
+    if (!fields.stat?.trim()) missing.push('stat');
+    if (!fields.contactName?.trim()) missing.push('contactName');
+    if (!fields.email?.trim()) missing.push('email');
+    if (!fields.phone?.trim()) missing.push('phone');
+
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Client entreprise (COMPANY): champs obligatoires manquants: ${missing.join(', ')}`,
+      );
+    }
   }
 
   private async ensureClientExists(clientId: string) {

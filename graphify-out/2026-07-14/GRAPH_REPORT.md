@@ -1,7 +1,7 @@
 # Graph Report - raffia-weave-flow-back  (2026-07-14)
 
 ## Corpus Check
-- 232 files · ~59,577 words
+- 232 files · ~59,602 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
