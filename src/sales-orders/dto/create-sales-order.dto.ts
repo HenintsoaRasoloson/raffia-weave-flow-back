@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
@@ -110,4 +111,14 @@ export class CreateSalesOrderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    example: true,
+    default: false,
+    description:
+      'Si true, le passage en IN_PRODUCTION est bloqué tant que le BAT n\'est pas approuvé.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  batRequired?: boolean;
 }

@@ -289,6 +289,7 @@ export class SalesOrdersService {
           totalTtc,
           currency: dto.currency ?? 'EUR',
           notes: dto.notes,
+          batRequired: dto.batRequired ?? false,
           items: {
             create: items.map((item) => {
               const lineTotalHt = item.quantity * item.unitPriceHt;
@@ -353,6 +354,9 @@ export class SalesOrdersService {
         ...(dto.taxRate !== undefined ? { taxRate: dto.taxRate } : {}),
         ...(dto.currency !== undefined ? { currency: dto.currency } : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+        ...(dto.batRequired !== undefined
+          ? { batRequired: dto.batRequired }
+          : {}),
       };
 
       if (dto.orderNumber !== undefined) {
