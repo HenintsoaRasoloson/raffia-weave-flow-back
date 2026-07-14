@@ -1,5 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client';
+import {
+  PurchaseOrderStatus,
+} from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { enumWhere } from '../common/prisma/enum-filter.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
@@ -24,8 +29,8 @@ export class PurchaseOrdersService {
       scalarFields: ['orderNumber'],
       relations: [{ table: 'Supplier', columns: ['name'], foreignKey: 'supplierId' }],
     });
-    const where = {
-      ...(query.status ? { status: query.status as any } : {}),
+    const where: Prisma.PurchaseOrderWhereInput = {
+      ...enumWhere('status', query.status, PurchaseOrderStatus),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -83,7 +88,7 @@ export class PurchaseOrdersService {
           orderNumber,
           referenceLevel,
           supplierId: dto.supplierId,
-          status: (dto.status ?? 'DRAFT') as any,
+          status: dto.status ?? PurchaseOrderStatus.DRAFT,
           orderDate: new Date(dto.orderDate),
           expectedAt: dto.expectedAt ? new Date(dto.expectedAt) : null,
           paidAmount: 0,
@@ -100,37 +105,43 @@ export class PurchaseOrdersService {
               lineTotal: item.quantity * item.unitPrice,
             })),
           },
-        } as any,
+        },
         include: { supplier: true, items: true, payments: true },
       });
     });
   }
 
   update(id: string, dto: UpdatePurchaseOrderDto) {
-    const payload: Record<string, unknown> = { ...dto };
+    const data: Prisma.PurchaseOrderUpdateInput = {
+      ...(dto.supplierId !== undefined ? { supplierId: dto.supplierId } : {}),
+      ...(dto.status !== undefined ? { status: dto.status } : {}),
+      ...(dto.currency !== undefined ? { currency: dto.currency } : {}),
+      ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+    };
+
     if (dto.orderNumber !== undefined) {
       const parsed = this.documentReferenceService.parseReferenceNumber(
         PURCHASE_ORDER_PREFIX,
         dto.orderNumber,
         'achat',
       );
-      payload.orderNumber = parsed.number;
-      payload.referenceLevel = parsed.level;
+      data.orderNumber = parsed.number;
+      data.referenceLevel = parsed.level;
     }
-    if (dto.expectedAt) payload.expectedAt = new Date(dto.expectedAt);
-    if (dto.receivedAt) payload.receivedAt = new Date(dto.receivedAt);
+    if (dto.expectedAt) data.expectedAt = new Date(dto.expectedAt);
+    if (dto.receivedAt) data.receivedAt = new Date(dto.receivedAt);
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.purchaseOrder.update({
         where: { id },
-        data: payload as any,
+        data,
         include: { supplier: true, items: true, payments: true },
       });
 
-      if (payload.referenceLevel !== undefined) {
+      if (data.referenceLevel !== undefined && typeof data.referenceLevel === 'number') {
         await tx.purchaseOrderItem.updateMany({
           where: { purchaseOrderId: id },
-          data: { referenceLevel: payload.referenceLevel as number },
+          data: { referenceLevel: data.referenceLevel },
         });
       }
 
@@ -148,21 +159,21 @@ export class PurchaseOrdersService {
       throw new NotFoundException('Bon de commande introuvable');
     }
 
-    const current = purchaseOrder.status as unknown as string;
-    if (current === 'CANCELLED') {
+    const current = purchaseOrder.status;
+    if (current === PurchaseOrderStatus.CANCELLED) {
       throw new BadRequestException('Un bon de commande annule ne peut pas etre recu');
     }
 
-    if (current === 'RECEIVED') {
+    if (current === PurchaseOrderStatus.RECEIVED) {
       throw new BadRequestException('Le bon de commande est deja recu');
     }
 
     const updated = await this.prisma.purchaseOrder.update({
       where: { id },
       data: {
-        status: 'RECEIVED',
+        status: PurchaseOrderStatus.RECEIVED,
         receivedAt: new Date(),
-      } as any,
+      },
       include: { supplier: true, items: true, payments: true },
     });
 
@@ -173,8 +184,8 @@ export class PurchaseOrdersService {
           where: { id: item.componentId },
           data: {
             stockQty: { increment: item.quantity },
-          } as any,
-        }).catch(() => { /* composant supprimé entre-temps */ });
+          },
+        }).catch(() => undefined);
       }
     }
 
@@ -199,7 +210,7 @@ export class PurchaseOrdersService {
       throw new NotFoundException('Bon de commande introuvable');
     }
 
-    if ((purchaseOrder.status as unknown as string) === 'CANCELLED') {
+    if (purchaseOrder.status === PurchaseOrderStatus.CANCELLED) {
       throw new BadRequestException(
         'Impossible d enregistrer un paiement sur un bon de commande annule',
       );
@@ -241,7 +252,7 @@ export class PurchaseOrdersService {
         data: {
           purchaseOrderId: id,
           amount: dto.amount,
-          paymentMethod: dto.paymentMethod as any,
+          paymentMethod: dto.paymentMethod,
           paidAt,
           notes: dto.notes,
         },
@@ -266,7 +277,7 @@ export class PurchaseOrdersService {
         data: {
           paidAmount: newPaidAmount,
           paidAt: newPaidAmount >= total ? paidAt : null,
-        } as any,
+        },
         include: { supplier: true, items: true, payments: true },
       });
     });

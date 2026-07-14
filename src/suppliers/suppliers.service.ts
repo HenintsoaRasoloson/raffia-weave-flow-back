@@ -42,11 +42,34 @@ export class SuppliersService {
   }
 
   create(dto: CreateSupplierDto) {
-    return this.prisma.supplier.create({ data: dto as any });
+    return this.prisma.supplier.create({
+      data: {
+        name: dto.name,
+        country: dto.country,
+        category: dto.category,
+        email: dto.email,
+        phone: dto.phone,
+        leadTimeDays: dto.leadTimeDays,
+        qualityRating: dto.qualityRating,
+      },
+    });
   }
 
   update(id: string, dto: UpdateSupplierDto) {
-    return this.prisma.supplier.update({ where: { id }, data: dto as any });
+    return this.prisma.supplier.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.country !== undefined ? { country: dto.country } : {}),
+        ...(dto.category !== undefined ? { category: dto.category } : {}),
+        ...(dto.email !== undefined ? { email: dto.email } : {}),
+        ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
+        ...(dto.leadTimeDays !== undefined ? { leadTimeDays: dto.leadTimeDays } : {}),
+        ...(dto.qualityRating !== undefined
+          ? { qualityRating: dto.qualityRating }
+          : {}),
+      },
+    });
   }
 
   remove(id: string) {

@@ -1,7 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
+import type { Prisma } from '../generated/prisma/client';
+import {
+  ClientType,
+  SalesOrderStatus,
+} from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { enumWhere } from '../common/prisma/enum-filter.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
@@ -38,9 +44,9 @@ export class SalesOrdersService {
       scalarFields: ['orderNumber'],
       relations: [{ table: 'Client', columns: ['name'], foreignKey: 'clientId' }],
     });
-    const where = {
-      ...(query.status ? { status: query.status as any } : {}),
-      ...(query.type ? { orderType: query.type as any } : {}),
+    const where: Prisma.SalesOrderWhereInput = {
+      ...enumWhere('status', query.status, SalesOrderStatus),
+      ...enumWhere('orderType', query.type, ClientType),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -122,7 +128,7 @@ export class SalesOrdersService {
 
     const created = await this.uploadBatDocument(
       salesOrderId,
-      { kind: existing.kind as any },
+      { kind: existing.kind },
       file,
       userId,
       { version: nextVersion },
@@ -196,7 +202,7 @@ export class SalesOrdersService {
       data: {
         salesOrderId,
         referenceLevel: order.referenceLevel,
-        kind: dto.kind as any,
+        kind: dto.kind,
         originalName: file.originalname,
         mimeType: file.mimetype,
         bucket,
@@ -206,7 +212,7 @@ export class SalesOrdersService {
         compressedSize: storedBuffer.length,
         compressionAlgo: algo,
         uploadedById: userId,
-      } as any,
+      },
     });
   }
 
@@ -275,8 +281,8 @@ export class SalesOrdersService {
           orderNumber,
           referenceLevel,
           clientId: dto.clientId,
-          orderType: dto.orderType as any,
-          status: (dto.status ?? 'TO_PROCESS') as any,
+          orderType: dto.orderType,
+          status: dto.status ?? SalesOrderStatus.TO_PROCESS,
           orderDate: new Date(dto.orderDate),
           taxRate,
           totalHt,
@@ -298,7 +304,7 @@ export class SalesOrdersService {
               };
             }),
           },
-        } as any,
+        },
         include: { items: true, client: true },
       });
     });
@@ -340,27 +346,35 @@ export class SalesOrdersService {
 
   update(id: string, dto: UpdateSalesOrderDto) {
     return this.prisma.$transaction(async (tx) => {
-      const payload: Record<string, unknown> = { ...dto };
+      const data: Prisma.SalesOrderUpdateInput = {
+        ...(dto.clientId !== undefined ? { clientId: dto.clientId } : {}),
+        ...(dto.orderType !== undefined ? { orderType: dto.orderType } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
+        ...(dto.taxRate !== undefined ? { taxRate: dto.taxRate } : {}),
+        ...(dto.currency !== undefined ? { currency: dto.currency } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+      };
+
       if (dto.orderNumber !== undefined) {
         const parsed = this.documentReferenceService.parseReferenceNumber(
           SALES_ORDER_PREFIX,
           dto.orderNumber,
           'de commande',
         );
-        payload.orderNumber = parsed.number;
-        payload.referenceLevel = parsed.level;
+        data.orderNumber = parsed.number;
+        data.referenceLevel = parsed.level;
       }
       if (dto.orderDate) {
-        payload.orderDate = new Date(dto.orderDate);
+        data.orderDate = new Date(dto.orderDate);
       }
 
       const updated = await tx.salesOrder.update({
         where: { id },
-        data: payload as any,
+        data,
       });
 
-      if (payload.referenceLevel !== undefined) {
-        const referenceLevel = payload.referenceLevel as number;
+      if (data.referenceLevel !== undefined && typeof data.referenceLevel === 'number') {
+        const referenceLevel = data.referenceLevel;
         await tx.salesOrderItem.updateMany({
           where: { salesOrderId: id },
           data: { referenceLevel },
@@ -402,7 +416,7 @@ export class SalesOrdersService {
 
     const updated = await this.prisma.salesOrder.update({
       where: { id },
-      data: { status: next as any },
+      data: { status: next },
     });
 
     if (userId) {
@@ -431,7 +445,7 @@ export class SalesOrdersService {
     }
     const updated = await this.prisma.salesOrder.update({
       where: { id },
-      data: { batSentAt: new Date() } as any,
+      data: { batSentAt: new Date() },
     });
 
     if (userId) {
@@ -467,7 +481,7 @@ export class SalesOrdersService {
     }
     const updated = await this.prisma.salesOrder.update({
       where: { id },
-      data: { batApprovedAt: new Date() } as any,
+      data: { batApprovedAt: new Date() },
     });
 
     if (userId) {

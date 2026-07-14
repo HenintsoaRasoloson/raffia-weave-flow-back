@@ -1,7 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
+import type { Prisma } from '../generated/prisma/client';
+import {
+  ProductSize,
+  ProductStatus,
+} from '../generated/prisma/client';
+import type { PrismaTransactionClient } from '../common/document-reference/document-reference.service';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { enumWhere } from '../common/prisma/enum-filter.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import {
   compressBufferIfNeeded,
@@ -32,8 +39,8 @@ export class ProductsService {
       term: query.q,
       scalarFields: ['ref', 'name'],
     });
-    const where = {
-      ...(query.status ? { status: query.status as any } : {}),
+    const where: Prisma.ProductWhereInput = {
+      ...enumWhere('status', query.status, ProductStatus),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -178,14 +185,14 @@ export class ProductsService {
             technicalSheetId: sheet.id,
             sequence: element.sequence,
             name: element.name,
-            category: element.category as any,
+            category: element.category,
             componentType: element.componentType,
             material: element.material,
             color: element.color,
             dimensions: element.dimensions,
             sizeLabel: element.sizeLabel,
             quantity: element.quantity,
-            unit: (element.unit ?? null) as any,
+            unit: element.unit ?? null,
             isOptional: element.isOptional ?? false,
             notes: element.notes,
           })),
@@ -262,7 +269,7 @@ export class ProductsService {
             compressedSize: storedBuffer.length,
             compressionAlgo: algo,
             uploadedById: userId,
-          } as any,
+          },
         });
       }),
     );
@@ -370,7 +377,7 @@ export class ProductsService {
 
       const nextRef = dto.ref?.trim()
         ? dto.ref.trim().toUpperCase()
-        : await this.generateNextSequentialProductRef(tx as any, category);
+        : await this.generateNextSequentialProductRef(tx, category);
 
       this.assertRefMatchesCategory(nextRef, category);
 
@@ -382,13 +389,13 @@ export class ProductsService {
           categoryId: dto.categoryId,
           basePrice: dto.basePrice,
           stockOnHand: dto.stockOnHand,
-          status: dto.status as any,
+          status: dto.status ?? ProductStatus.ACTIVE,
           variants: dto.variants?.length
             ? {
                 create: dto.variants.map((variant) => ({
                   sku: variant.sku,
                   colorId: variant.colorId,
-                  size: (variant.size ?? 'MM') as any,
+                  size: variant.size ?? ProductSize.MM,
                   defaultDimensions: variant.defaultDimensions,
                   name: variant.name,
                   stockOnHand: variant.stockOnHand ?? 0,
@@ -397,7 +404,7 @@ export class ProductsService {
                 })),
               }
             : undefined,
-        } as any,
+        },
       });
     });
   }
@@ -437,10 +444,14 @@ export class ProductsService {
       const updated = await tx.product.update({
         where: { id },
         data: {
-          ...dto,
           ...(dto.ref ? { ref: dto.ref.trim().toUpperCase() } : {}),
-          variants: undefined,
-        } as any,
+          ...(dto.name !== undefined ? { name: dto.name } : {}),
+          ...(dto.description !== undefined ? { description: dto.description } : {}),
+          ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
+          ...(dto.basePrice !== undefined ? { basePrice: dto.basePrice } : {}),
+          ...(dto.stockOnHand !== undefined ? { stockOnHand: dto.stockOnHand } : {}),
+          ...(dto.status !== undefined ? { status: dto.status } : {}),
+        },
       });
 
       if (dto.variants) {
@@ -452,11 +463,11 @@ export class ProductsService {
               productId: id,
               sku: variant.sku,
               colorId: variant.colorId,
-              size: (variant.size ?? 'MM') as any,
+              size: variant.size ?? ProductSize.MM,
               defaultDimensions: variant.defaultDimensions,
               name: variant.name,
               stockOnHand: variant.stockOnHand ?? 0,
-              priceOverride: variant.priceOverride as any,
+              priceOverride: variant.priceOverride,
               active: variant.active ?? true,
             })),
           });
@@ -561,7 +572,7 @@ export class ProductsService {
   }
 
   private async generateNextSequentialProductRef(
-    tx: any,
+    tx: PrismaTransactionClient,
     category: {
       id: string;
       code: string | null;

@@ -1,5 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client';
+import {
+  ProductionStatus,
+} from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { enumWhere } from '../common/prisma/enum-filter.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
@@ -30,8 +35,8 @@ export class ProductionOrdersService {
       scalarFields: ['orderNumber'],
       relations: [{ table: 'Product', columns: ['name'], foreignKey: 'productId' }],
     });
-    const where = {
-      ...(query.status ? { status: query.status as any } : {}),
+    const where: Prisma.ProductionOrderWhereInput = {
+      ...enumWhere('status', query.status, ProductionStatus),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -110,21 +115,20 @@ export class ProductionOrdersService {
         );
       }
 
-      const payload: Record<string, unknown> = {
-        ...dto,
+      const data: Prisma.ProductionOrderUncheckedCreateInput = {
         orderNumber,
         referenceLevel,
+        productId: dto.productId,
+        variantId: dto.variantId,
+        salesOrderId: dto.salesOrderId,
+        salesOrderItemId: dto.salesOrderItemId,
+        quantity: dto.quantity,
+        status: dto.status ?? ProductionStatus.PLANNED,
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
       };
-      if (dto.startDate) {
-        payload.startDate = new Date(dto.startDate);
-      }
-      if (dto.endDate) {
-        payload.endDate = new Date(dto.endDate);
-      }
 
-      return tx.productionOrder.create({
-        data: payload as any,
-      });
+      return tx.productionOrder.create({ data });
     });
 
     // Passer la commande client en IN_PRODUCTION automatiquement
@@ -171,7 +175,17 @@ export class ProductionOrdersService {
         linkedOrderLevel = salesOrder?.referenceLevel ?? null;
       }
 
-      const payload: Record<string, unknown> = { ...dto };
+      const data: Prisma.ProductionOrderUpdateInput = {
+        ...(dto.productId !== undefined ? { productId: dto.productId } : {}),
+        ...(dto.variantId !== undefined ? { variantId: dto.variantId } : {}),
+        ...(dto.salesOrderId !== undefined ? { salesOrderId: dto.salesOrderId } : {}),
+        ...(dto.salesOrderItemId !== undefined
+          ? { salesOrderItemId: dto.salesOrderItemId }
+          : {}),
+        ...(dto.quantity !== undefined ? { quantity: dto.quantity } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
+      };
+
       if (dto.orderNumber !== undefined) {
         const parsed = this.documentReferenceService.parseReferenceNumber(
           PRODUCTION_ORDER_PREFIX,
@@ -183,20 +197,20 @@ export class ProductionOrdersService {
             `Reference OF invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${linkedOrderLevel}`,
           );
         }
-        payload.orderNumber = parsed.number;
-        payload.referenceLevel = parsed.level;
+        data.orderNumber = parsed.number;
+        data.referenceLevel = parsed.level;
       }
 
       if (dto.startDate) {
-        payload.startDate = new Date(dto.startDate);
+        data.startDate = new Date(dto.startDate);
       }
       if (dto.endDate) {
-        payload.endDate = new Date(dto.endDate);
+        data.endDate = new Date(dto.endDate);
       }
 
       return tx.productionOrder.update({
         where: { id },
-        data: payload as any,
+        data,
       });
     });
   }
@@ -210,7 +224,10 @@ export class ProductionOrdersService {
       throw new NotFoundException('Ordre de fabrication introuvable');
     }
 
-    if (existing.status === 'COMPLETED' || existing.status === 'CANCELLED') {
+    if (
+      existing.status === ProductionStatus.COMPLETED ||
+      existing.status === ProductionStatus.CANCELLED
+    ) {
       throw new BadRequestException(
         `OF verrouille: statut ${existing.status} non modifiable`,
       );
@@ -223,20 +240,25 @@ export class ProductionOrdersService {
       );
     }
 
-    const nextStatus = dto.status ?? (clamped === 100 ? 'COMPLETED' : undefined);
+    const nextStatus =
+      dto.status ?? (clamped === 100 ? ProductionStatus.COMPLETED : undefined);
 
-    if (nextStatus === 'COMPLETED' && clamped < 100) {
+    if (nextStatus === ProductionStatus.COMPLETED && clamped < 100) {
       throw new BadRequestException(
         'Un OF ne peut etre COMPLETE qu avec 100% d avancement',
       );
     }
 
+    const updateData: Prisma.ProductionOrderUpdateInput = {
+      progress: clamped,
+    };
+    if (nextStatus) {
+      updateData.status = nextStatus;
+    }
+
     return this.prisma.productionOrder.update({
       where: { id },
-      data: {
-        progress: clamped,
-        ...(nextStatus ? { status: nextStatus as any } : {}),
-      } as any,
+      data: updateData,
     });
   }
 
@@ -297,7 +319,7 @@ export class ProductionOrdersService {
     if (!order) {
       throw new NotFoundException('Ordre de fabrication introuvable');
     }
-    if ((order.status as unknown as string) !== 'COMPLETED') {
+    if (order.status !== ProductionStatus.COMPLETED) {
       throw new BadRequestException(
         'La validation qualité n\'est possible que sur un OF terminé (COMPLETED)',
       );
@@ -307,7 +329,7 @@ export class ProductionOrdersService {
     }
     const updated = await this.prisma.productionOrder.update({
       where: { id },
-      data: { qualityApproved: true } as any,
+      data: { qualityApproved: true },
     });
 
     if (userId) {

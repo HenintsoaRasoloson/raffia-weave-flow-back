@@ -57,11 +57,30 @@ export class BomItemsService {
   }
 
   create(dto: CreateBomItemDto) {
-    return this.prisma.bomItem.create({ data: dto as any });
+    return this.prisma.bomItem.create({
+      data: {
+        productId: dto.productId,
+        variantId: dto.variantId,
+        componentId: dto.componentId,
+        colorId: dto.colorId,
+        quantity: dto.quantity,
+        unitCost: dto.unitCost,
+      },
+    });
   }
 
   update(id: string, dto: UpdateBomItemDto) {
-    return this.prisma.bomItem.update({ where: { id }, data: dto as any });
+    return this.prisma.bomItem.update({
+      where: { id },
+      data: {
+        ...(dto.productId !== undefined ? { productId: dto.productId } : {}),
+        ...(dto.variantId !== undefined ? { variantId: dto.variantId } : {}),
+        ...(dto.componentId !== undefined ? { componentId: dto.componentId } : {}),
+        ...(dto.colorId !== undefined ? { colorId: dto.colorId } : {}),
+        ...(dto.quantity !== undefined ? { quantity: dto.quantity } : {}),
+        ...(dto.unitCost !== undefined ? { unitCost: dto.unitCost } : {}),
+      },
+    });
   }
 
   remove(id: string) {

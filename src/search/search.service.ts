@@ -1,4 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  ClientStatus,
+  ClientType,
+  DeliveryStatus,
+  InvoiceStatus,
+  InvoiceType,
+  ProductStatus,
+  ProductionStatus,
+  PurchaseOrderStatus,
+  SalesOrderStatus,
+} from '../generated/prisma/client';
+import { enumWhere } from '../common/prisma/enum-filter.util';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   buildFrenchTableTextWhere,
@@ -263,7 +275,7 @@ export class SearchService {
 
     const rows = await this.prisma.product.findMany({
       where: {
-        ...(input.status ? { status: input.status as any } : {}),
+        ...enumWhere('status', input.status, ProductStatus),
         ...(input.categoryId ? { categoryId: input.categoryId } : {}),
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
         ...(textOr ? { OR: textOr } : {}),
@@ -303,7 +315,7 @@ export class SearchService {
 
     const rows = await this.prisma.client.findMany({
       where: {
-        ...(input.status ? { status: input.status as any } : {}),
+        ...enumWhere('status', input.status, ClientStatus),
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
         ...textWhere,
       },
@@ -432,8 +444,8 @@ export class SearchService {
 
     const rows = await this.prisma.salesOrder.findMany({
       where: {
-        ...(input.status ? { status: input.status as any } : {}),
-        ...(input.type ? { orderType: input.type as any } : {}),
+        ...enumWhere('status', input.status, SalesOrderStatus),
+        ...enumWhere('orderType', input.type, ClientType),
         ...(input.clientId ? { clientId: input.clientId } : {}),
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
         ...(input.referenceLevel !== undefined
@@ -491,8 +503,8 @@ export class SearchService {
 
     const rows = await this.prisma.invoice.findMany({
       where: {
-        ...(input.status ? { status: input.status as any } : {}),
-        ...(input.type ? { type: input.type as any } : {}),
+        ...enumWhere('status', input.status, InvoiceStatus),
+        ...enumWhere('type', input.type, InvoiceType),
         ...(input.clientId ? { clientId: input.clientId } : {}),
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
         ...(input.referenceLevel !== undefined
@@ -549,7 +561,7 @@ export class SearchService {
 
     const rows = await this.prisma.delivery.findMany({
       where: {
-        ...(input.status ? { status: input.status as any } : {}),
+        ...enumWhere('status', input.status, DeliveryStatus),
         ...(input.clientId ? { clientId: input.clientId } : {}),
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
         ...(input.referenceLevel !== undefined
@@ -603,7 +615,7 @@ export class SearchService {
 
     const rows = await this.prisma.productionOrder.findMany({
       where: {
-        ...(input.status ? { status: input.status as any } : {}),
+        ...enumWhere('status', input.status, ProductionStatus),
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
         ...(input.referenceLevel !== undefined
           ? { referenceLevel: input.referenceLevel }
@@ -657,7 +669,7 @@ export class SearchService {
 
     const rows = await this.prisma.purchaseOrder.findMany({
       where: {
-        ...(input.status ? { status: input.status as any } : {}),
+        ...enumWhere('status', input.status, PurchaseOrderStatus),
         ...(input.supplierId ? { supplierId: input.supplierId } : {}),
         ...(input.createdAtFilter ? { createdAt: input.createdAtFilter } : {}),
         ...(input.referenceLevel !== undefined

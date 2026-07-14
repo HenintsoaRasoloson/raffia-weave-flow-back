@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { ComponentOrigin } from '../generated/prisma/client';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { UpdateComponentDto } from './dto/update-component.dto';
 
@@ -44,22 +45,45 @@ export class ComponentsService {
   }
 
   create(dto: CreateComponentDto) {
-    const origin = dto.origin ?? 'PURCHASED';
-    if (origin === 'PURCHASED' && !dto.supplierId) {
+    const origin = dto.origin ?? ComponentOrigin.PURCHASED;
+    if (origin === ComponentOrigin.PURCHASED && !dto.supplierId) {
       throw new BadRequestException(
         'supplierId est requis pour un composant de type PURCHASED (acheté à un fournisseur).',
       );
     }
-    return this.prisma.component.create({ data: dto as any });
+    return this.prisma.component.create({
+      data: {
+        ref: dto.ref,
+        name: dto.name,
+        unit: dto.unit,
+        origin,
+        supplierId: dto.supplierId,
+        stockQty: dto.stockQty,
+        minQty: dto.minQty,
+        costPerUnit: dto.costPerUnit,
+      },
+    });
   }
 
   update(id: string, dto: UpdateComponentDto) {
-    if (dto.origin === 'PURCHASED' && dto.supplierId === null) {
+    if (dto.origin === ComponentOrigin.PURCHASED && dto.supplierId === null) {
       throw new BadRequestException(
         'supplierId ne peut pas être null pour un composant de type PURCHASED.',
       );
     }
-    return this.prisma.component.update({ where: { id }, data: dto as any });
+    return this.prisma.component.update({
+      where: { id },
+      data: {
+        ...(dto.ref !== undefined ? { ref: dto.ref } : {}),
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.unit !== undefined ? { unit: dto.unit } : {}),
+        ...(dto.origin !== undefined ? { origin: dto.origin } : {}),
+        ...(dto.supplierId !== undefined ? { supplierId: dto.supplierId } : {}),
+        ...(dto.stockQty !== undefined ? { stockQty: dto.stockQty } : {}),
+        ...(dto.minQty !== undefined ? { minQty: dto.minQty } : {}),
+        ...(dto.costPerUnit !== undefined ? { costPerUnit: dto.costPerUnit } : {}),
+      },
+    });
   }
 
   remove(id: string) {

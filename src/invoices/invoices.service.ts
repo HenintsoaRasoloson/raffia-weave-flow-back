@@ -1,7 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
+import type { Prisma } from '../generated/prisma/client';
+import {
+  InvoiceStatus,
+  InvoiceType,
+} from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { enumWhere } from '../common/prisma/enum-filter.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
@@ -18,7 +24,8 @@ import { UploadInvoiceDocumentDto } from './dto/upload-invoice-document.dto';
 import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 
-const INVOICE_TYPES = ['PROFORMA', 'DEPOSIT', 'INTERMEDIATE', 'FINAL', 'CREDIT_NOTE'] as const;
+const INVOICE_TYPES = Object.values(InvoiceType);
+type InvoiceTypeValue = (typeof INVOICE_TYPES)[number];
 
 @Injectable()
 export class InvoicesService {
@@ -39,9 +46,9 @@ export class InvoicesService {
       scalarFields: ['invoiceNumber'],
       relations: [{ table: 'Client', columns: ['name'], foreignKey: 'clientId' }],
     });
-    const where = {
-      ...(query.status ? { status: query.status as any } : {}),
-      ...(query.type ? { type: query.type as any } : {}),
+    const where: Prisma.InvoiceWhereInput = {
+      ...enumWhere('status', query.status, InvoiceStatus),
+      ...enumWhere('type', query.type, InvoiceType),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -121,7 +128,7 @@ export class InvoicesService {
 
     const created = await this.uploadDocument(
       invoiceId,
-      { kind: existing.kind as any },
+      { kind: existing.kind },
       file,
       userId,
       { version: nextVersion },
@@ -192,7 +199,7 @@ export class InvoicesService {
       data: {
         invoiceId,
         referenceLevel: invoice.referenceLevel,
-        kind: dto.kind as any,
+        kind: dto.kind,
         originalName: file.originalname,
         storedName,
         mimeType: file.mimetype,
@@ -246,7 +253,7 @@ export class InvoicesService {
     const normalizedType = this.normalizeInvoiceType(type);
 
     const existing = await this.prisma.invoiceTemplate.findUnique({
-      where: { type: normalizedType as any },
+      where: { type: normalizedType },
     });
 
     if (existing) {
@@ -268,7 +275,7 @@ export class InvoicesService {
     const normalizedType = this.normalizeInvoiceType(type);
 
     return this.prisma.invoiceTemplate.upsert({
-      where: { type: normalizedType as any },
+      where: { type: normalizedType },
       update: {
         name: dto.name,
         subject: dto.subject,
@@ -276,7 +283,7 @@ export class InvoicesService {
         footer: dto.footer,
       },
       create: {
-        type: normalizedType as any,
+        type: normalizedType,
         name: dto.name,
         subject: dto.subject,
         body: dto.body,
@@ -341,8 +348,8 @@ export class InvoicesService {
         data: {
           invoiceNumber,
           referenceLevel,
-          type: normalizedType as any,
-          status: (dto.status ?? 'ISSUED') as any,
+          type: normalizedType,
+          status: dto.status ?? InvoiceStatus.ISSUED,
           clientId: dto.clientId,
           salesOrderId: dto.salesOrderId,
           issueDate: new Date(dto.issueDate),
@@ -368,7 +375,7 @@ export class InvoicesService {
               };
             }),
           },
-        } as any,
+        },
         include: { items: true, client: true },
       });
     });
@@ -424,15 +431,23 @@ export class InvoicesService {
 
       const targetType = dto.type
         ? this.normalizeInvoiceType(dto.type)
-        : (current.type as (typeof INVOICE_TYPES)[number]);
+        : current.type;
       const targetSalesOrderId = dto.salesOrderId ?? current.salesOrderId ?? null;
 
-      const payload: Record<string, unknown> = { ...dto, type: targetType };
+      const data: Prisma.InvoiceUpdateInput = {
+        type: targetType,
+        ...(dto.clientId !== undefined ? { clientId: dto.clientId } : {}),
+        ...(dto.salesOrderId !== undefined ? { salesOrderId: dto.salesOrderId } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
+        ...(dto.currency !== undefined ? { currency: dto.currency } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+      };
+
       if (dto.issueDate) {
-        payload.issueDate = new Date(dto.issueDate);
+        data.issueDate = new Date(dto.issueDate);
       }
       if (dto.dueDate) {
-        payload.dueDate = new Date(dto.dueDate);
+        data.dueDate = new Date(dto.dueDate);
       }
 
       let linkedOrderLevel: number | null = null;
@@ -455,24 +470,23 @@ export class InvoicesService {
             `Reference facture invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${linkedOrderLevel}`,
           );
         }
-        payload.invoiceNumber = parsed.number;
-        payload.referenceLevel = parsed.level;
+        data.invoiceNumber = parsed.number;
+        data.referenceLevel = parsed.level;
       } else if (dto.type !== undefined && current.referenceLevel !== null) {
-        // If type changes, keep level and just switch prefix.
-        payload.invoiceNumber = this.buildInvoiceNumber(
+        data.invoiceNumber = this.buildInvoiceNumber(
           current.referenceLevel,
           targetType,
         );
-        payload.referenceLevel = current.referenceLevel;
+        data.referenceLevel = current.referenceLevel;
       }
 
       const updated = await tx.invoice.update({
         where: { id },
-        data: payload as any,
+        data,
       });
 
-      if (payload.referenceLevel !== undefined) {
-        const referenceLevel = payload.referenceLevel as number;
+      if (data.referenceLevel !== undefined && typeof data.referenceLevel === 'number') {
+        const referenceLevel = data.referenceLevel;
         await tx.invoiceItem.updateMany({
           where: { invoiceId: id },
           data: { referenceLevel },
@@ -500,16 +514,16 @@ export class InvoicesService {
       throw new NotFoundException('Facture introuvable');
     }
 
-    const current = invoice.status as unknown as string;
-    if (current === 'PAID') {
+    const current = invoice.status;
+    if (current === InvoiceStatus.PAID) {
       throw new BadRequestException('La facture est deja payee');
     }
-    if (current === 'CANCELLED' || current === 'DRAFT') {
+    if (current === InvoiceStatus.CANCELLED || current === InvoiceStatus.DRAFT) {
       throw new BadRequestException(
         `Transition invalide: ${current} -> PAID`,
       );
     }
-    if (invoice.type === 'CREDIT_NOTE') {
+    if (invoice.type === InvoiceType.CREDIT_NOTE) {
       throw new BadRequestException(
         'Un avoir ne peut pas etre marque comme paye',
       );
@@ -518,10 +532,10 @@ export class InvoicesService {
     return this.prisma.invoice.update({
       where: { id },
       data: {
-        status: 'PAID',
+        status: InvoiceStatus.PAID,
         paidAt: new Date(),
         paidAmount: invoice.totalTtc,
-      } as any,
+      },
     });
   }
 
@@ -534,16 +548,16 @@ export class InvoicesService {
       throw new NotFoundException('Facture introuvable');
     }
 
-    const current = invoice.status as unknown as string;
-    if (current === 'PAID') {
+    const current = invoice.status;
+    if (current === InvoiceStatus.PAID) {
       throw new BadRequestException('La facture est deja payee');
     }
-    if (current === 'CANCELLED' || current === 'DRAFT') {
+    if (current === InvoiceStatus.CANCELLED || current === InvoiceStatus.DRAFT) {
       throw new BadRequestException(
         `Transition invalide: ${current} -> PAID`,
       );
     }
-    if (invoice.type === 'CREDIT_NOTE') {
+    if (invoice.type === InvoiceType.CREDIT_NOTE) {
       throw new BadRequestException(
         'Un avoir ne peut pas etre marque comme paye',
       );
@@ -552,10 +566,10 @@ export class InvoicesService {
     const updated = await this.prisma.invoice.update({
       where: { id },
       data: {
-        status: 'PAID',
+        status: InvoiceStatus.PAID,
         paidAt: new Date(),
         paidAmount: invoice.totalTtc,
-      } as any,
+      },
     });
 
     if (userId) {
@@ -590,12 +604,15 @@ export class InvoicesService {
     if (!invoice) {
       throw new NotFoundException('Facture introuvable');
     }
-    if ((invoice.status as unknown as string) === 'PAID') {
+    if (invoice.status === InvoiceStatus.PAID) {
       throw new BadRequestException('La facture est déjà intégralement payée');
     }
-    if (['CANCELLED', 'DRAFT'].includes(invoice.status as unknown as string)) {
+    if (
+      invoice.status === InvoiceStatus.CANCELLED ||
+      invoice.status === InvoiceStatus.DRAFT
+    ) {
       throw new BadRequestException(
-        `Impossible d\'enregistrer un paiement sur une facture ${invoice.status}`,
+        `Impossible d'enregistrer un paiement sur une facture ${invoice.status}`,
       );
     }
 
@@ -618,7 +635,7 @@ export class InvoicesService {
           invoiceId: id,
           referenceLevel: invoice.referenceLevel,
           amount: dto.amount,
-          paymentMethod: dto.paymentMethod as any,
+          paymentMethod: dto.paymentMethod,
           paidAt,
           notes: dto.notes,
         },
@@ -662,9 +679,11 @@ export class InvoicesService {
         where: { id },
         data: {
           paidAmount: newPaidAmount,
-          status: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
+          status: isFullyPaid
+            ? InvoiceStatus.PAID
+            : InvoiceStatus.PARTIALLY_PAID,
           paidAt: isFullyPaid ? paidAt : null,
-        } as any,
+        },
         include: { items: true, client: true, payments: true },
       });
 
@@ -739,19 +758,19 @@ export class InvoicesService {
     return this.prisma.invoice.delete({ where: { id } });
   }
 
-  private normalizeInvoiceType(type: string): (typeof INVOICE_TYPES)[number] {
+  private normalizeInvoiceType(type: string): InvoiceTypeValue {
     const normalized = type?.toUpperCase();
-    if (!INVOICE_TYPES.includes(normalized as (typeof INVOICE_TYPES)[number])) {
+    if (!INVOICE_TYPES.includes(normalized as InvoiceTypeValue)) {
       throw new BadRequestException(
         `Type de facture invalide. Valeurs autorisées: ${INVOICE_TYPES.join(', ')}`,
       );
     }
 
-    return normalized as (typeof INVOICE_TYPES)[number];
+    return normalized as InvoiceTypeValue;
   }
 
-  private getInvoicePrefix(type: (typeof INVOICE_TYPES)[number]) {
-    const map: Record<(typeof INVOICE_TYPES)[number], string> = {
+  private getInvoicePrefix(type: InvoiceTypeValue) {
+    const map: Record<InvoiceTypeValue, string> = {
       PROFORMA: 'PRO',
       DEPOSIT: 'ACO',
       INTERMEDIATE: 'INT',
@@ -762,20 +781,14 @@ export class InvoicesService {
     return map[type];
   }
 
-  private buildInvoiceNumber(
-    level: number,
-    type: (typeof INVOICE_TYPES)[number],
-  ) {
+  private buildInvoiceNumber(level: number, type: InvoiceTypeValue) {
     const prefix = this.getInvoicePrefix(type);
     return `${prefix}/${level
       .toString()
       .padStart(BUSINESS_DOC_LEVEL_LENGTH, '0')}`;
   }
 
-  private parseInvoiceNumber(
-    rawInvoiceNumber: string,
-    type: (typeof INVOICE_TYPES)[number],
-  ) {
+  private parseInvoiceNumber(rawInvoiceNumber: string, type: InvoiceTypeValue) {
     const normalized = rawInvoiceNumber.trim().toUpperCase();
     const prefix = this.getInvoicePrefix(type);
     const regex = new RegExp(

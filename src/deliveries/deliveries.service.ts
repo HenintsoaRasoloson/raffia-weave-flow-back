@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client';
+import { DeliveryStatus } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { enumWhere } from '../common/prisma/enum-filter.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
@@ -27,8 +30,8 @@ export class DeliveriesService {
       scalarFields: ['deliveryNumber', 'carrier', 'trackingCode'],
       relations: [{ table: 'Client', columns: ['name'], foreignKey: 'clientId' }],
     });
-    const where = {
-      ...(query.status ? { status: query.status as any } : {}),
+    const where: Prisma.DeliveryWhereInput = {
+      ...enumWhere('status', query.status, DeliveryStatus),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -95,18 +98,19 @@ export class DeliveriesService {
         );
       }
 
-      const payload: Record<string, unknown> = {
-        ...dto,
+      const data: Prisma.DeliveryUncheckedCreateInput = {
         deliveryNumber,
         referenceLevel,
+        salesOrderId: dto.salesOrderId,
+        clientId: dto.clientId,
+        carrier: dto.carrier,
+        trackingCode: dto.trackingCode,
+        status: dto.status ?? DeliveryStatus.PLANNED,
+        notes: dto.notes,
+        eta: dto.eta ? new Date(dto.eta) : undefined,
       };
-      if (dto.eta) {
-        payload.eta = new Date(dto.eta);
-      }
 
-      return tx.delivery.create({
-        data: payload as any,
-      });
+      return tx.delivery.create({ data });
     });
   }
 
@@ -131,7 +135,15 @@ export class DeliveriesService {
         );
       }
 
-      const payload: Record<string, unknown> = { ...dto };
+      const data: Prisma.DeliveryUpdateInput = {
+        ...(dto.salesOrderId !== undefined ? { salesOrderId: dto.salesOrderId } : {}),
+        ...(dto.clientId !== undefined ? { clientId: dto.clientId } : {}),
+        ...(dto.carrier !== undefined ? { carrier: dto.carrier } : {}),
+        ...(dto.trackingCode !== undefined ? { trackingCode: dto.trackingCode } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+      };
+
       if (dto.deliveryNumber !== undefined) {
         const parsed = this.documentReferenceService.parseReferenceNumber(
           DELIVERY_PREFIX,
@@ -143,17 +155,17 @@ export class DeliveriesService {
             `Reference livraison invalide: le niveau ${parsed.level} doit correspondre au niveau commande ${salesOrder.referenceLevel}`,
           );
         }
-        payload.deliveryNumber = parsed.number;
-        payload.referenceLevel = parsed.level;
+        data.deliveryNumber = parsed.number;
+        data.referenceLevel = parsed.level;
       }
 
       if (dto.eta) {
-        payload.eta = new Date(dto.eta);
+        data.eta = new Date(dto.eta);
       }
 
       return tx.delivery.update({
         where: { id },
-        data: payload as any,
+        data,
       });
     });
   }
@@ -167,8 +179,11 @@ export class DeliveriesService {
       throw new NotFoundException('Livraison introuvable');
     }
 
-    const allowedSourceStatuses = ['PREPARING', 'IN_TRANSIT'];
-    const current = delivery.status as unknown as string;
+    const allowedSourceStatuses: DeliveryStatus[] = [
+      DeliveryStatus.PREPARING,
+      DeliveryStatus.IN_TRANSIT,
+    ];
+    const current = delivery.status;
     if (!allowedSourceStatuses.includes(current)) {
       throw new BadRequestException(
         `Transition invalide: ${current} -> DELIVERED`,
@@ -178,9 +193,9 @@ export class DeliveriesService {
     const updated = await this.prisma.delivery.update({
       where: { id },
       data: {
-        status: 'DELIVERED',
+        status: DeliveryStatus.DELIVERED,
         deliveredAt: new Date(),
-      } as any,
+      },
       include: { salesOrder: true, client: true },
     });
 

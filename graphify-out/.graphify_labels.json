@@ -108,5 +108,13 @@
   "106": ".findAll",
   "107": "Agent Back-End : Architecte NestJS & Clean Code",
   "108": "Agent Back-QA : Tests NestJS (Jest & Supertest)",
-  "109": "Agent Swagger & Documentation API"
+  "109": "Agent Swagger & Documentation API",
+  "110": "UploadClientFiscalCardDto",
+  "111": "UpsertInvoiceTemplateDto",
+  "112": "CatalogShareProductResponseDto",
+  "113": "bom-items.controller.ts",
+  "114": "deliveries.controller.ts",
+  "115": "ClientResponseDto",
+  "116": "SupplierResponseDto",
+  "117": "users.module.ts"
 }

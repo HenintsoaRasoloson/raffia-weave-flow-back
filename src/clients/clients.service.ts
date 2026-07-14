@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
+import type { Prisma } from '../generated/prisma/client';
+import { ClientStatus, ClientType } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { enumWhere } from '../common/prisma/enum-filter.util';
 import { buildFrenchTableTextWhere } from '../common/query/search.util';
 import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compression.util';
 import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
@@ -29,9 +32,9 @@ export class ClientsService {
       ['name', 'email', 'contactName'],
       query.q,
     );
-    const where = {
-      ...(query.status ? { status: query.status as any } : {}),
-      ...(query.type ? { type: query.type as any } : {}),
+    const where: Prisma.ClientWhereInput = {
+      ...enumWhere('status', query.status, ClientStatus),
+      ...enumWhere('type', query.type, ClientType),
       ...textWhere,
     };
 
@@ -203,7 +206,7 @@ export class ClientsService {
         compressionAlgo: algo,
         validUntil: new Date(dto.validUntil),
         uploadedById: userId,
-      } as any,
+      },
     });
   }
 
@@ -237,14 +240,36 @@ export class ClientsService {
 
   create(dto: CreateClientDto) {
     return this.prisma.client.create({
-      data: dto as any,
+      data: {
+        name: dto.name,
+        type: dto.type,
+        status: dto.status,
+        email: dto.email,
+        contactName: dto.contactName,
+        siret: dto.siret,
+        addressLine: dto.addressLine,
+        city: dto.city,
+        postalCode: dto.postalCode,
+        country: dto.country,
+      },
     });
   }
 
   update(id: string, dto: UpdateClientDto) {
     return this.prisma.client.update({
       where: { id },
-      data: dto as any,
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.type !== undefined ? { type: dto.type } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
+        ...(dto.email !== undefined ? { email: dto.email } : {}),
+        ...(dto.contactName !== undefined ? { contactName: dto.contactName } : {}),
+        ...(dto.siret !== undefined ? { siret: dto.siret } : {}),
+        ...(dto.addressLine !== undefined ? { addressLine: dto.addressLine } : {}),
+        ...(dto.city !== undefined ? { city: dto.city } : {}),
+        ...(dto.postalCode !== undefined ? { postalCode: dto.postalCode } : {}),
+        ...(dto.country !== undefined ? { country: dto.country } : {}),
+      },
     });
   }
 

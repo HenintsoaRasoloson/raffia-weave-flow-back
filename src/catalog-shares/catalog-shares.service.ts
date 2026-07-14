@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../generated/prisma/client';
+import { CatalogShareStatus } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { PrismaService } from '../prisma/prisma.service';
@@ -92,7 +93,7 @@ export class CatalogSharesService {
         token,
         title: dto.title,
         clientId: dto.clientId ?? null,
-        status: (dto.status as any) ?? 'ACTIVE',
+        status: dto.status ?? CatalogShareStatus.ACTIVE,
         expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
         products: productIds.length
           ? {
@@ -116,7 +117,7 @@ export class CatalogSharesService {
         ...(dto.expiresAt !== undefined
           ? { expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null }
           : {}),
-        ...(dto.status ? { status: dto.status as any } : {}),
+        ...(dto.status ? { status: dto.status } : {}),
       },
       include: {
         client: true,
