@@ -1,9 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { dateFieldWhere } from '../common/query/date-range.util';
 import { buildFrenchTableTextWhere } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+
+const CATEGORY_SORT_FIELDS = ['createdAt', 'name', 'slug', 'code'] as const;
 
 @Injectable()
 export class CategoriesService {
@@ -18,7 +23,8 @@ export class CategoriesService {
       ['name', 'slug', 'code'],
       query.q,
     );
-    const where = {
+    const where: Prisma.CategoryWhereInput = {
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...textWhere,
     };
 
@@ -26,7 +32,7 @@ export class CategoriesService {
       const [items, total] = await Promise.all([
         tx.category.findMany({
           where,
-          orderBy: { createdAt: 'desc' },
+          orderBy: resolveOrderBy(query, CATEGORY_SORT_FIELDS, 'createdAt'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

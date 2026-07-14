@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBomItemDto } from './dto/create-bom-item.dto';
 import { UpdateBomItemDto } from './dto/update-bom-item.dto';
+
+const BOM_ITEM_SORT_FIELDS = ['createdAt', 'quantity'] as const;
 
 @Injectable()
 export class BomItemsService {
@@ -19,7 +24,10 @@ export class BomItemsService {
         { table: 'Component', columns: ['name'], foreignKey: 'componentId' },
       ],
     });
-    const where = {
+    const where: Prisma.BomItemWhereInput = {
+      ...optionalEquals('productId', query.productId),
+      ...optionalEquals('componentId', query.componentId),
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -33,7 +41,7 @@ export class BomItemsService {
             component: true,
             color: true,
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: resolveOrderBy(query, BOM_ITEM_SORT_FIELDS, 'createdAt'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

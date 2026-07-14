@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { dateFieldWhere } from '../common/query/date-range.util';
 import { buildFrenchTableTextWhere } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
+
+const SUPPLIER_SORT_FIELDS = ['createdAt', 'name', 'category', 'country'] as const;
 
 @Injectable()
 export class SuppliersService {
@@ -18,7 +23,8 @@ export class SuppliersService {
       ['name', 'email', 'category'],
       query.q,
     );
-    const where = {
+    const where: Prisma.SupplierWhereInput = {
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...textWhere,
     };
 
@@ -26,7 +32,7 @@ export class SuppliersService {
       const [items, total] = await Promise.all([
         tx.supplier.findMany({
           where,
-          orderBy: { createdAt: 'desc' },
+          orderBy: resolveOrderBy(query, SUPPLIER_SORT_FIELDS, 'createdAt'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

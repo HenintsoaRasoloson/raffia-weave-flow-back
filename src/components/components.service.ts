@@ -1,10 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { ListQueryDto } from '../common/dto/list-query.dto';
-import { buildFrenchTextSearchOr } from '../common/query/search.util';
-import { PrismaService } from '../prisma/prisma.service';
+import type { Prisma } from '../generated/prisma/client';
 import { ComponentOrigin } from '../generated/prisma/client';
+import { ListQueryDto } from '../common/dto/list-query.dto';
+import { enumWhere } from '../common/prisma/enum-filter.util';
+import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
+import { buildFrenchTextSearchOr } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { UpdateComponentDto } from './dto/update-component.dto';
+
+const COMPONENT_SORT_FIELDS = ['createdAt', 'name', 'ref', 'stockQty'] as const;
 
 @Injectable()
 export class ComponentsService {
@@ -17,7 +23,10 @@ export class ComponentsService {
       term: query.q,
       scalarFields: ['ref', 'name'],
     });
-    const where = {
+    const where: Prisma.ComponentWhereInput = {
+      ...enumWhere('origin', query.type, ComponentOrigin),
+      ...optionalEquals('supplierId', query.supplierId),
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -26,7 +35,7 @@ export class ComponentsService {
         tx.component.findMany({
           where,
           include: { supplier: true },
-          orderBy: { createdAt: 'desc' },
+          orderBy: resolveOrderBy(query, COMPONENT_SORT_FIELDS, 'createdAt'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

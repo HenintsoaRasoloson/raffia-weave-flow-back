@@ -4,11 +4,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
+import type { Prisma } from '../generated/prisma/client';
+import { UserRole } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { enumWhere } from '../common/prisma/enum-filter.util';
+import { dateFieldWhere } from '../common/query/date-range.util';
 import { buildFrenchTableTextWhere } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+
+const USER_SORT_FIELDS = ['createdAt', 'email', 'name'] as const;
 
 @Injectable()
 export class UsersService {
@@ -23,7 +30,9 @@ export class UsersService {
       ['email', 'name'],
       query.q,
     );
-    const where = {
+    const where: Prisma.UserWhereInput = {
+      ...enumWhere('role', query.type, UserRole),
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...textWhere,
     };
 
@@ -31,7 +40,7 @@ export class UsersService {
       const [items, total] = await Promise.all([
         tx.user.findMany({
           where,
-          orderBy: { createdAt: 'desc' },
+          orderBy: resolveOrderBy(query, USER_SORT_FIELDS, 'createdAt'),
           skip: (page - 1) * pageSize,
           take: pageSize,
           select: {

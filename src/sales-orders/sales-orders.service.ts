@@ -8,7 +8,9 @@ import {
 } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { enumWhere } from '../common/prisma/enum-filter.util';
+import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -24,6 +26,7 @@ import { UpdateSalesOrderStatusDto } from './dto/update-sales-order-status.dto';
 import { UpdateSalesOrderDto } from './dto/update-sales-order.dto';
 
 const SALES_ORDER_PREFIX = 'CMD';
+const SALES_ORDER_SORT_FIELDS = ['orderDate', 'createdAt', 'totalTtc', 'orderNumber'] as const;
 
 @Injectable()
 export class SalesOrdersService {
@@ -47,6 +50,8 @@ export class SalesOrdersService {
     const where: Prisma.SalesOrderWhereInput = {
       ...enumWhere('status', query.status, SalesOrderStatus),
       ...enumWhere('orderType', query.type, ClientType),
+      ...optionalEquals('clientId', query.clientId),
+      ...dateFieldWhere('orderDate', query.dateFrom, query.dateTo),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -55,7 +60,7 @@ export class SalesOrdersService {
         tx.salesOrder.findMany({
           where,
           include: { client: true, items: true, invoices: true, deliveries: true },
-          orderBy: { orderDate: 'desc' },
+          orderBy: resolveOrderBy(query, SALES_ORDER_SORT_FIELDS, 'orderDate'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

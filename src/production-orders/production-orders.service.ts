@@ -6,7 +6,9 @@ import {
 } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { enumWhere } from '../common/prisma/enum-filter.util';
+import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
@@ -22,6 +24,13 @@ import {
 } from './dto/upsert-production-stages.dto';
 
 const PRODUCTION_ORDER_PREFIX = 'OF';
+const PRODUCTION_ORDER_SORT_FIELDS = [
+  'createdAt',
+  'startDate',
+  'endDate',
+  'progress',
+  'orderNumber',
+] as const;
 
 const PRODUCTION_STAGES_ORDERED: ProductionStage[] = [
   ProductionStage.PREPARATION,
@@ -61,6 +70,9 @@ export class ProductionOrdersService {
     });
     const where: Prisma.ProductionOrderWhereInput = {
       ...enumWhere('status', query.status, ProductionStatus),
+      ...optionalEquals('productId', query.productId),
+      ...optionalEquals('salesOrderId', query.salesOrderId),
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -69,7 +81,7 @@ export class ProductionOrdersService {
         tx.productionOrder.findMany({
           where,
           include: { product: true, variant: true, salesOrder: true },
-          orderBy: { createdAt: 'desc' },
+          orderBy: resolveOrderBy(query, PRODUCTION_ORDER_SORT_FIELDS, 'createdAt'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

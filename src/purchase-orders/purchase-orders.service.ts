@@ -5,7 +5,9 @@ import {
 } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { enumWhere } from '../common/prisma/enum-filter.util';
+import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
@@ -13,6 +15,13 @@ import { RecordPurchaseOrderPaymentDto } from './dto/record-purchase-order-payme
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
 
 const PURCHASE_ORDER_PREFIX = 'ACH';
+const PURCHASE_ORDER_SORT_FIELDS = [
+  'orderDate',
+  'createdAt',
+  'expectedAt',
+  'totalHt',
+  'orderNumber',
+] as const;
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -31,6 +40,8 @@ export class PurchaseOrdersService {
     });
     const where: Prisma.PurchaseOrderWhereInput = {
       ...enumWhere('status', query.status, PurchaseOrderStatus),
+      ...optionalEquals('supplierId', query.supplierId),
+      ...dateFieldWhere('orderDate', query.dateFrom, query.dateTo),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -39,7 +50,7 @@ export class PurchaseOrdersService {
         tx.purchaseOrder.findMany({
           where,
           include: { supplier: true, items: true, payments: true },
-          orderBy: { orderDate: 'desc' },
+          orderBy: resolveOrderBy(query, PURCHASE_ORDER_SORT_FIELDS, 'orderDate'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

@@ -5,7 +5,9 @@ import type { Prisma } from '../generated/prisma/client';
 import { ClientStatus, ClientType } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { enumWhere } from '../common/prisma/enum-filter.util';
+import { dateFieldWhere } from '../common/query/date-range.util';
 import { buildFrenchTableTextWhere } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compression.util';
 import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
 import { GedPathsService } from '../ged/ged-paths.service';
@@ -15,6 +17,8 @@ import { CreateClientDto } from './dto/create-client.dto';
 import { UploadClientFiscalCardDto } from './dto/upload-client-fiscal-card.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { UpsertClientVariantPricesDto } from './dto/upsert-client-variant-prices.dto';
+
+const CLIENT_SORT_FIELDS = ['createdAt', 'name', 'email'] as const;
 
 @Injectable()
 export class ClientsService {
@@ -36,6 +40,7 @@ export class ClientsService {
     const where: Prisma.ClientWhereInput = {
       ...enumWhere('status', query.status, ClientStatus),
       ...enumWhere('type', query.type, ClientType),
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...textWhere,
     };
 
@@ -43,7 +48,7 @@ export class ClientsService {
       const [items, total] = await Promise.all([
         tx.client.findMany({
           where,
-          orderBy: { createdAt: 'desc' },
+          orderBy: resolveOrderBy(query, CLIENT_SORT_FIELDS, 'createdAt'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

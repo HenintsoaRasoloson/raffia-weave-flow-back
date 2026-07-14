@@ -9,7 +9,9 @@ import {
 import type { PrismaTransactionClient } from '../common/document-reference/document-reference.service';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { enumWhere } from '../common/prisma/enum-filter.util';
+import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import {
   compressBufferIfNeeded,
   decompressBufferIfNeeded,
@@ -21,6 +23,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpsertProductTechnicalSheetDto } from './dto/upsert-product-technical-sheet.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+
+const PRODUCT_SORT_FIELDS = ['createdAt', 'name', 'ref', 'basePrice'] as const;
 
 @Injectable()
 export class ProductsService {
@@ -41,13 +45,15 @@ export class ProductsService {
     });
     const where: Prisma.ProductWhereInput = {
       ...enumWhere('status', query.status, ProductStatus),
+      ...optionalEquals('categoryId', query.categoryId),
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...(textOr ? { OR: textOr } : {}),
     };
 
     return this.prisma.$transaction(async (tx) => {
       const baseQuery = {
         where,
-        orderBy: { createdAt: 'desc' as const },
+        orderBy: resolveOrderBy(query, PRODUCT_SORT_FIELDS, 'createdAt'),
         skip: (page - 1) * pageSize,
         take: pageSize,
       };

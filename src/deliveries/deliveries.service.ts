@@ -3,7 +3,9 @@ import type { Prisma } from '../generated/prisma/client';
 import { DeliveryStatus } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { enumWhere } from '../common/prisma/enum-filter.util';
+import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -12,6 +14,7 @@ import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 
 const DELIVERY_PREFIX = 'LIV';
+const DELIVERY_SORT_FIELDS = ['createdAt', 'eta', 'deliveredAt', 'deliveryNumber'] as const;
 
 @Injectable()
 export class DeliveriesService {
@@ -32,6 +35,9 @@ export class DeliveriesService {
     });
     const where: Prisma.DeliveryWhereInput = {
       ...enumWhere('status', query.status, DeliveryStatus),
+      ...optionalEquals('clientId', query.clientId),
+      ...optionalEquals('salesOrderId', query.salesOrderId),
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -40,7 +46,7 @@ export class DeliveriesService {
         tx.delivery.findMany({
           where,
           include: { client: true, salesOrder: true },
-          orderBy: { createdAt: 'desc' },
+          orderBy: resolveOrderBy(query, DELIVERY_SORT_FIELDS, 'createdAt'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

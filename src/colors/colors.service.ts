@@ -1,9 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { dateFieldWhere } from '../common/query/date-range.util';
 import { buildFrenchTableTextWhere } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateColorDto } from './dto/create-color.dto';
 import { UpdateColorDto } from './dto/update-color.dto';
+
+const COLOR_SORT_FIELDS = ['name', 'createdAt', 'hex'] as const;
 
 @Injectable()
 export class ColorsService {
@@ -18,7 +23,9 @@ export class ColorsService {
       ['name', 'hex'],
       query.q,
     );
-    const where = {
+    const where: Prisma.ColorWhereInput = {
+      ...(query.active === undefined ? {} : { active: query.active }),
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...textWhere,
     };
 
@@ -26,7 +33,7 @@ export class ColorsService {
       const [items, total] = await Promise.all([
         tx.color.findMany({
           where,
-          orderBy: { name: 'asc' },
+          orderBy: resolveOrderBy(query, COLOR_SORT_FIELDS, 'name', 'asc'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

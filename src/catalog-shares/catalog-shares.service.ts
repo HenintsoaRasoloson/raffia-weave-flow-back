@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../generated/prisma/client';
 import { CatalogShareStatus } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { enumWhere } from '../common/prisma/enum-filter.util';
+import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCatalogShareDto } from './dto/create-catalog-share.dto';
 import { ReplaceCatalogShareProductsDto } from './dto/replace-catalog-share-products.dto';
@@ -35,6 +38,8 @@ export type CatalogShareWithPublicProducts = Prisma.CatalogShareGetPayload<{
   };
 }>;
 
+const CATALOG_SHARE_SORT_FIELDS = ['createdAt', 'title', 'expiresAt', 'viewCount'] as const;
+
 @Injectable()
 export class CatalogSharesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -47,7 +52,10 @@ export class CatalogSharesService {
       scalarFields: ['title', 'token'],
       relations: [{ table: 'Client', columns: ['name'], foreignKey: 'clientId' }],
     });
-    const where = {
+    const where: Prisma.CatalogShareWhereInput = {
+      ...enumWhere('status', query.status, CatalogShareStatus),
+      ...optionalEquals('clientId', query.clientId),
+      ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -61,7 +69,7 @@ export class CatalogSharesService {
               include: { product: true },
             },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: resolveOrderBy(query, CATALOG_SHARE_SORT_FIELDS, 'createdAt'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

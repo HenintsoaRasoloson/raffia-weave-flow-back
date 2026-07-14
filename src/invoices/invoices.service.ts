@@ -8,7 +8,9 @@ import {
 } from '../generated/prisma/client';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { enumWhere } from '../common/prisma/enum-filter.util';
+import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
+import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -26,6 +28,7 @@ import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 
 const INVOICE_TYPES = Object.values(InvoiceType);
 type InvoiceTypeValue = (typeof INVOICE_TYPES)[number];
+const INVOICE_SORT_FIELDS = ['issueDate', 'createdAt', 'dueDate', 'totalTtc', 'invoiceNumber'] as const;
 
 @Injectable()
 export class InvoicesService {
@@ -49,6 +52,9 @@ export class InvoicesService {
     const where: Prisma.InvoiceWhereInput = {
       ...enumWhere('status', query.status, InvoiceStatus),
       ...enumWhere('type', query.type, InvoiceType),
+      ...optionalEquals('clientId', query.clientId),
+      ...optionalEquals('salesOrderId', query.salesOrderId),
+      ...dateFieldWhere('issueDate', query.dateFrom, query.dateTo),
       ...(textOr ? { OR: textOr } : {}),
     };
 
@@ -57,7 +63,7 @@ export class InvoicesService {
         tx.invoice.findMany({
           where,
           include: { client: true, salesOrder: true, items: true },
-          orderBy: { issueDate: 'desc' },
+          orderBy: resolveOrderBy(query, INVOICE_SORT_FIELDS, 'issueDate'),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),
