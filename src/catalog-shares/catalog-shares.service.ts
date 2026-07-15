@@ -7,6 +7,7 @@ import { enumWhere } from '../common/prisma/enum-filter.util';
 import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { resolveOrderBy } from '../common/query/sort.util';
+import { ProductsService } from '../products/products.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCatalogShareDto } from './dto/create-catalog-share.dto';
 import { ReplaceCatalogShareProductsDto } from './dto/replace-catalog-share-products.dto';
@@ -42,7 +43,10 @@ const CATALOG_SHARE_SORT_FIELDS = ['createdAt', 'title', 'expiresAt', 'viewCount
 
 @Injectable()
 export class CatalogSharesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly productsService: ProductsService,
+  ) {}
 
   async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
@@ -95,6 +99,7 @@ export class CatalogSharesService {
   async create(dto: CreateCatalogShareDto) {
     const token = randomUUID();
     const productIds = [...new Set(dto.productIds ?? [])];
+    await this.productsService.assertCompanyOwnedProductIds(productIds);
 
     return this.prisma.catalogShare.create({
       data: {
@@ -138,6 +143,7 @@ export class CatalogSharesService {
 
   async replaceProducts(id: string, dto: ReplaceCatalogShareProductsDto) {
     const productIds = [...new Set(dto.productIds)];
+    await this.productsService.assertCompanyOwnedProductIds(productIds);
 
     return this.prisma.$transaction(async (tx) => {
       const share = await tx.catalogShare.findUnique({ where: { id } });
@@ -204,6 +210,7 @@ export class CatalogSharesService {
       include: {
         client: true,
         products: {
+          where: { product: { ownership: 'COMPANY' } },
           include: { product: { include: { category: true } } },
         },
       },

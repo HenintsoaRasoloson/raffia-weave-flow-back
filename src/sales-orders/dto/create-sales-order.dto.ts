@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -12,6 +12,13 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { CreateProductDto } from '../../products/dto/create-product.dto';
+
+/** Nouveau modèle client créé à la volée lors de la commande (ownership forcé CLIENT). */
+export class CreateOrderClientProductDto extends OmitType(CreateProductDto, [
+  'ownership',
+  'ownerClientId',
+] as const) {}
 
 export class CreateSalesOrderItemDto {
   @ApiProperty({ example: 'Cabas Madagascar - Terracotta' })
@@ -26,7 +33,7 @@ export class CreateSalesOrderItemDto {
   @ApiPropertyOptional({
     example: 89,
     description:
-      'Prix HT manuel. Si omis: B2C = prix catalogue, B2B = accord variante (sinon erreur: fournir ce champ).',
+      'Prix HT manuel. Si omis: B2C = prix catalogue / basePrice, B2B = accord variante (sinon erreur: fournir ce champ).',
   })
   @IsOptional()
   @IsNumber()
@@ -39,7 +46,11 @@ export class CreateSalesOrderItemDto {
   @Min(0)
   taxRate?: number;
 
-  @ApiPropertyOptional({ example: 'clx-product-id' })
+  @ApiPropertyOptional({
+    example: 'clx-product-id',
+    description:
+      'Produit entreprise (COMPANY) ou modèle client (CLIENT) du même client que la commande. Incompatible avec newProduct.',
+  })
   @IsOptional()
   @IsString()
   productId?: string;
@@ -48,6 +59,16 @@ export class CreateSalesOrderItemDto {
   @IsOptional()
   @IsString()
   variantId?: string;
+
+  @ApiPropertyOptional({
+    type: CreateOrderClientProductDto,
+    description:
+      'Crée un nouveau modèle propriété du client de la commande (hors catalogue). Incompatible avec productId.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateOrderClientProductDto)
+  newProduct?: CreateOrderClientProductDto;
 }
 
 export class CreateSalesOrderDto {

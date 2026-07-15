@@ -37,6 +37,13 @@ enum ProductStatus {
   ARCHIVED
 }
 
+/// Propriétaire du produit / modèle.
+/// COMPANY = vendable, catalogue. CLIENT = modèle privé d'un client (hors catalogue).
+enum ProductOwnership {
+  COMPANY
+  CLIENT
+}
+
 enum ProductSize {
   PM
   MM
@@ -324,6 +331,11 @@ model Product {
   description      String?
   categoryId       String
   category         Category            @relation(fields: [categoryId], references: [id])
+  /// COMPANY = produit entreprise (catalogue). CLIENT = modèle propriété d'un client.
+  ownership        ProductOwnership    @default(COMPANY)
+  /// Obligatoire si ownership = CLIENT ; null si COMPANY.
+  ownerClientId    String?
+  ownerClient      Client?             @relation(fields: [ownerClientId], references: [id], onDelete: Restrict)
   basePrice        Decimal             @db.Decimal(12, 2)
   stockOnHand      Int                 @default(0)
   status           ProductStatus       @default(ACTIVE)
@@ -341,6 +353,8 @@ model Product {
 
   @@index([name])
   @@index([status, createdAt])
+  @@index([ownership, ownerClientId])
+  @@index([ownerClientId])
 }
 
 model ProductTechnicalSheet {
@@ -446,6 +460,7 @@ model Client {
   shares        CatalogShare[]
   fiscalCards   ClientFiscalCard[]
   variantPrices ClientVariantPrice[]
+  ownedProducts Product[]
   ledgerEntries LedgerEntry[]
   budgets       FinancialBudget[]
   createdAt     DateTime          @default(now())

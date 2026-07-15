@@ -15,4 +15,18 @@ export class ProductResponseDto {
 
   @ApiProperty({ example: 'ACTIVE' })
   status!: string;
+
+  @ApiProperty({
+    example: 'COMPANY',
+    enum: ['COMPANY', 'CLIENT'],
+    description: 'COMPANY = catalogue / vente. CLIENT = modèle propriété d\'un client.',
+  })
+  ownership!: 'COMPANY' | 'CLIENT';
+
+  @ApiProperty({
+    example: null,
+    nullable: true,
+    description: 'Client propriétaire si ownership = CLIENT.',
+  })
+  ownerClientId!: string | null;
 }

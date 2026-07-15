@@ -3,6 +3,7 @@ import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import type { Prisma } from '../generated/prisma/client';
 import {
+  ProductOwnership,
   ProductSize,
   ProductStatus,
 } from '../generated/prisma/client';
@@ -45,7 +46,9 @@ export class ProductsService {
     });
     const where: Prisma.ProductWhereInput = {
       ...enumWhere('status', query.status, ProductStatus),
+      ...enumWhere('ownership', query.ownership, ProductOwnership),
       ...optionalEquals('categoryId', query.categoryId),
+      ...optionalEquals('ownerClientId', query.clientId),
       ...dateFieldWhere('createdAt', query.dateFrom, query.dateTo),
       ...(textOr ? { OR: textOr } : {}),
     };
@@ -68,12 +71,15 @@ export class ProductsService {
                 name: true,
                 status: true,
                 basePrice: true,
+                ownership: true,
+                ownerClientId: true,
               },
             })
           : tx.product.findMany({
               ...baseQuery,
               include: {
                 category: true,
+                ownerClient: { select: { id: true, name: true } },
                 ...(includeVariants ? { variants: true } : {}),
               },
             }),
@@ -90,6 +96,7 @@ export class ProductsService {
         where: { id },
         include: {
           category: true,
+          ownerClient: { select: { id: true, name: true } },
           variants: true,
           bomItems: true,
           productImages: { orderBy: { createdAt: 'desc' } },
@@ -364,54 +371,70 @@ export class ProductsService {
   }
 
   create(dto: CreateProductDto) {
-    return this.prisma.$transaction(async (tx) => {
-      const category = await tx.category.findUnique({
-        where: { id: dto.categoryId },
-        select: {
-          id: true,
-          code: true,
-          slug: true,
-          name: true,
-          refSequenceLength: true,
-          refNextSequence: true,
-        },
-      });
+    return this.prisma.$transaction((tx) => this.createInTransaction(tx, dto));
+  }
 
-      if (!category) {
-        throw new NotFoundException('Categorie introuvable');
-      }
+  /**
+   * Crée un produit dans une transaction externe (ex. création de commande
+   * avec nouveau modèle client).
+   */
+  async createInTransaction(
+    tx: PrismaTransactionClient,
+    dto: CreateProductDto,
+  ) {
+    const ownership = dto.ownership ?? ProductOwnership.COMPANY;
+    await this.assertOwnershipConsistency(tx, ownership, dto.ownerClientId);
 
-      const nextRef = dto.ref?.trim()
-        ? dto.ref.trim().toUpperCase()
-        : await this.generateNextSequentialProductRef(tx, category);
+    const category = await tx.category.findUnique({
+      where: { id: dto.categoryId },
+      select: {
+        id: true,
+        code: true,
+        slug: true,
+        name: true,
+        refSequenceLength: true,
+        refNextSequence: true,
+      },
+    });
 
-      this.assertRefMatchesCategory(nextRef, category);
+    if (!category) {
+      throw new NotFoundException('Categorie introuvable');
+    }
 
-      return tx.product.create({
-        data: {
-          ref: nextRef,
-          name: dto.name,
-          description: dto.description,
-          categoryId: dto.categoryId,
-          basePrice: dto.basePrice,
-          stockOnHand: dto.stockOnHand,
-          status: dto.status ?? ProductStatus.ACTIVE,
-          variants: dto.variants?.length
-            ? {
-                create: dto.variants.map((variant) => ({
-                  sku: variant.sku,
-                  colorId: variant.colorId,
-                  size: variant.size ?? ProductSize.MM,
-                  defaultDimensions: variant.defaultDimensions,
-                  name: variant.name,
-                  stockOnHand: variant.stockOnHand ?? 0,
-                  priceOverride: variant.priceOverride,
-                  active: variant.active ?? true,
-                })),
-              }
-            : undefined,
-        },
-      });
+    const nextRef = dto.ref?.trim()
+      ? dto.ref.trim().toUpperCase()
+      : await this.generateNextSequentialProductRef(tx, category);
+
+    this.assertRefMatchesCategory(nextRef, category);
+
+    return tx.product.create({
+      data: {
+        ref: nextRef,
+        name: dto.name,
+        description: dto.description,
+        categoryId: dto.categoryId,
+        ownership,
+        ownerClientId:
+          ownership === ProductOwnership.CLIENT ? dto.ownerClientId! : null,
+        basePrice: dto.basePrice,
+        stockOnHand: dto.stockOnHand,
+        status: dto.status ?? ProductStatus.ACTIVE,
+        variants: dto.variants?.length
+          ? {
+              create: dto.variants.map((variant) => ({
+                sku: variant.sku,
+                colorId: variant.colorId,
+                size: variant.size ?? ProductSize.MM,
+                defaultDimensions: variant.defaultDimensions,
+                name: variant.name,
+                stockOnHand: variant.stockOnHand ?? 0,
+                priceOverride: variant.priceOverride,
+                active: variant.active ?? true,
+              })),
+            }
+          : undefined,
+      },
+      include: { variants: true },
     });
   }
 
@@ -419,11 +442,44 @@ export class ProductsService {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.product.findUnique({
         where: { id },
-        select: { id: true, categoryId: true, ref: true },
+        select: {
+          id: true,
+          categoryId: true,
+          ref: true,
+          ownership: true,
+          ownerClientId: true,
+        },
       });
 
       if (!existing) {
         throw new NotFoundException('Produit introuvable');
+      }
+
+      const nextOwnership = (dto.ownership ??
+        existing.ownership) as ProductOwnership;
+      const nextOwnerClientId =
+        dto.ownerClientId !== undefined
+          ? dto.ownerClientId
+          : existing.ownerClientId ?? undefined;
+
+      await this.assertOwnershipConsistency(
+        tx,
+        nextOwnership,
+        nextOwnership === ProductOwnership.CLIENT ? nextOwnerClientId : undefined,
+      );
+
+      if (
+        existing.ownership === ProductOwnership.COMPANY &&
+        nextOwnership === ProductOwnership.CLIENT
+      ) {
+        const shareCount = await tx.catalogShareProduct.count({
+          where: { productId: id },
+        });
+        if (shareCount > 0) {
+          throw new BadRequestException(
+            'Impossible de passer ce produit en modèle client: il est présent dans un catalogue partagé.',
+          );
+        }
       }
 
       const targetCategoryId = dto.categoryId ?? existing.categoryId;
@@ -457,6 +513,15 @@ export class ProductsService {
           ...(dto.basePrice !== undefined ? { basePrice: dto.basePrice } : {}),
           ...(dto.stockOnHand !== undefined ? { stockOnHand: dto.stockOnHand } : {}),
           ...(dto.status !== undefined ? { status: dto.status } : {}),
+          ...(dto.ownership !== undefined ? { ownership: dto.ownership } : {}),
+          ...(dto.ownership !== undefined || dto.ownerClientId !== undefined
+            ? {
+                ownerClientId:
+                  nextOwnership === ProductOwnership.CLIENT
+                    ? (nextOwnerClientId ?? null)
+                    : null,
+              }
+            : {}),
         },
       });
 
@@ -486,6 +551,67 @@ export class ProductsService {
 
   remove(id: string) {
     return this.prisma.product.delete({ where: { id } });
+  }
+
+  /** Vérifie que des produits sont bien des produits entreprise (catalogue). */
+  async assertCompanyOwnedProductIds(
+    productIds: string[],
+    tx?: PrismaTransactionClient,
+  ) {
+    if (!productIds.length) return;
+    const client = tx ?? this.prisma;
+    const products = await client.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, ownership: true, ref: true },
+    });
+
+    if (products.length !== productIds.length) {
+      const found = new Set(products.map((p) => p.id));
+      const missing = productIds.filter((id) => !found.has(id));
+      throw new NotFoundException(
+        `Produit(s) introuvable(s): ${missing.join(', ')}`,
+      );
+    }
+
+    const clientOwned = products.filter(
+      (p) => p.ownership === ProductOwnership.CLIENT,
+    );
+    if (clientOwned.length > 0) {
+      throw new BadRequestException(
+        `Les modèles clients ne peuvent pas figurer dans un catalogue: ${clientOwned
+          .map((p) => p.ref)
+          .join(', ')}`,
+      );
+    }
+  }
+
+  private async assertOwnershipConsistency(
+    tx: PrismaTransactionClient,
+    ownership: ProductOwnership,
+    ownerClientId?: string | null,
+  ) {
+    if (ownership === ProductOwnership.COMPANY) {
+      if (ownerClientId) {
+        throw new BadRequestException(
+          'Un produit entreprise (COMPANY) ne doit pas avoir ownerClientId',
+        );
+      }
+      return;
+    }
+
+    if (!ownerClientId) {
+      throw new BadRequestException(
+        'ownerClientId est obligatoire pour un modèle client (CLIENT)',
+      );
+    }
+
+    const client = await tx.client.findUnique({
+      where: { id: ownerClientId },
+      select: { id: true },
+    });
+    if (!client) {
+      throw new NotFoundException('Client propriétaire introuvable');
+    }
   }
 
   private async ensureProductExists(productId: string) {

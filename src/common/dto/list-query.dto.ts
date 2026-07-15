@@ -70,6 +70,16 @@ export class ListQueryDto {
   @IsString()
   clientId?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Filtre propriété produit (COMPANY = catalogue, CLIENT = modèle client). Utilisé avec clientId = ownerClientId pour les modèles d\'un client.',
+    enum: ['COMPANY', 'CLIENT'],
+  })
+  @IsOptional()
+  @Transform(({ value }) => normalizeEnumParam(value))
+  @IsIn(['COMPANY', 'CLIENT'])
+  ownership?: 'COMPANY' | 'CLIENT';
+
   @ApiPropertyOptional({ description: 'Filtre fournisseur (avance)' })
   @IsOptional()
   @IsString()

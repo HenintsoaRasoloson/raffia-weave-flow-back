@@ -94,6 +94,25 @@ export class CreateProductDto {
   description?: string;
 
   @ApiPropertyOptional({
+    example: 'COMPANY',
+    enum: ['COMPANY', 'CLIENT'],
+    default: 'COMPANY',
+    description:
+      'COMPANY = produit entreprise (catalogue). CLIENT = modèle privé d\'un client (hors catalogue).',
+  })
+  @IsOptional()
+  @IsIn(['COMPANY', 'CLIENT'])
+  ownership?: 'COMPANY' | 'CLIENT';
+
+  @ApiPropertyOptional({
+    example: 'clx-client-id',
+    description: 'Obligatoire si ownership = CLIENT. Doit être null/omis si COMPANY.',
+  })
+  @IsOptional()
+  @IsString()
+  ownerClientId?: string;
+
+  @ApiPropertyOptional({
     type: [CreateProductVariantDto],
     description:
       'Variantes du produit (taille PM/MM/GM, coloris et dimensions par taille).',
