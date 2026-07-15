@@ -11,7 +11,6 @@ import { SearchController } from '../search/search.controller';
 import { SearchService } from '../search/search.service';
 import { ReferenceLookupController } from '../reference-lookup/reference-lookup.controller';
 import { ReferenceLookupService } from '../reference-lookup/reference-lookup.service';
-import { InvoiceDocumentTemplatesController } from '../invoices/invoice-document-templates.controller';
 import { InvoiceDocumentTemplatesService } from '../invoices/invoice-document-templates.service';
 import { InvoicesController } from '../invoices/invoices.controller';
 import { InvoicesService } from '../invoices/invoices.service';
@@ -30,7 +29,6 @@ describe('OpenAPI response schemas (contractualisation)', () => {
         ReferenceLookupController,
         AuditController,
         InvoicesController,
-        InvoiceDocumentTemplatesController,
         ProductsController,
       ],
       providers: [

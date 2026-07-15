@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -19,6 +21,7 @@ import {
   ApiBody,
   ApiConsumes,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -33,13 +36,19 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../auth/auth.types';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
+import { CreateInvoiceDocumentTemplateDto } from './dto/create-invoice-document-template.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { InvoiceDocumentTemplatePreviewResponseDto } from './dto/invoice-document-template-preview-response.dto';
+import { InvoiceDocumentTemplateResponseDto } from './dto/invoice-document-template-response.dto';
 import { InvoiceResponseDto } from './dto/invoice-response.dto';
-import { RecordPaymentDto } from './dto/record-payment.dto';
-import { UploadInvoiceDocumentDto } from './dto/upload-invoice-document.dto';
 import { InvoiceTemplateResponseDto } from './dto/invoice-template-response.dto';
+import { PreviewInvoiceDocumentTemplateDto } from './dto/preview-invoice-document-template.dto';
+import { RecordPaymentDto } from './dto/record-payment.dto';
+import { UpdateInvoiceDocumentTemplateDto } from './dto/update-invoice-document-template.dto';
+import { UploadInvoiceDocumentDto } from './dto/upload-invoice-document.dto';
 import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { InvoiceDocumentTemplatesService } from './invoice-document-templates.service';
 import { InvoicesService } from './invoices.service';
 
 function sanitizeFilename(value: string): string {
@@ -51,7 +60,10 @@ function sanitizeFilename(value: string): string {
 @ApiBearerAuth()
 @Controller('invoices')
 export class InvoicesController {
-  constructor(private readonly invoicesService: InvoicesService) {}
+  constructor(
+    private readonly invoicesService: InvoicesService,
+    private readonly documentTemplatesService: InvoiceDocumentTemplatesService,
+  ) {}
 
   @Get('templates')
   @ApiOperation({ summary: 'Lister les templates de facture configurés' })
@@ -86,6 +98,100 @@ export class InvoicesController {
     @Body() dto: UpsertInvoiceTemplateDto,
   ): Promise<InvoiceTemplateResponseDto> {
     return this.invoicesService.upsertTemplate(type, dto);
+  }
+
+  // Static "document-templates" routes MUST stay above @Get(':id')
+  // otherwise Nest treats "document-templates" as an invoice id → data: null.
+  @Get('document-templates')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Lister les templates document de facture' })
+  @ApiOkResponse({
+    description: 'Liste des templates (tableau vide si aucun)',
+    type: InvoiceDocumentTemplateResponseDto,
+    isArray: true,
+  })
+  listDocumentTemplates(): Promise<InvoiceDocumentTemplateResponseDto[]> {
+    return this.documentTemplatesService.list();
+  }
+
+  @Post('document-templates')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Créer un template document de facture' })
+  @ApiCreatedResponse({
+    description: 'Template créé',
+    type: InvoiceDocumentTemplateResponseDto,
+  })
+  createDocumentTemplate(
+    @Body() dto: CreateInvoiceDocumentTemplateDto,
+  ): Promise<InvoiceDocumentTemplateResponseDto> {
+    return this.documentTemplatesService.create(dto);
+  }
+
+  @Get('document-templates/:id')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Récupérer un template document de facture' })
+  @ApiOkResponse({
+    description: 'Template trouvé',
+    type: InvoiceDocumentTemplateResponseDto,
+  })
+  getDocumentTemplate(
+    @Param('id') id: string,
+  ): Promise<InvoiceDocumentTemplateResponseDto> {
+    return this.documentTemplatesService.findOne(id);
+  }
+
+  @Patch('document-templates/:id')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Mettre à jour un template document de facture' })
+  @ApiOkResponse({
+    description: 'Template mis à jour',
+    type: InvoiceDocumentTemplateResponseDto,
+  })
+  updateDocumentTemplate(
+    @Param('id') id: string,
+    @Body() dto: UpdateInvoiceDocumentTemplateDto,
+  ): Promise<InvoiceDocumentTemplateResponseDto> {
+    return this.documentTemplatesService.update(id, dto);
+  }
+
+  @Delete('document-templates/:id')
+  @UseGuards(AdminGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Supprimer un template document de facture' })
+  @ApiNoContentResponse({ description: 'Template supprimé' })
+  async removeDocumentTemplate(@Param('id') id: string): Promise<void> {
+    await this.documentTemplatesService.remove(id);
+  }
+
+  @Post('document-templates/:id/set-default')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Définir le template comme défaut pour son scope (type ou global)',
+  })
+  @ApiOkResponse({
+    description: 'Template défini comme défaut',
+    type: InvoiceDocumentTemplateResponseDto,
+  })
+  setDefaultDocumentTemplate(
+    @Param('id') id: string,
+  ): Promise<InvoiceDocumentTemplateResponseDto> {
+    return this.documentTemplatesService.setDefault(id);
+  }
+
+  @Post('document-templates/:id/preview')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Prévisualiser le template en HTML (mock ou facture réelle)',
+  })
+  @ApiOkResponse({
+    description: 'Aperçu HTML',
+    type: InvoiceDocumentTemplatePreviewResponseDto,
+  })
+  previewDocumentTemplate(
+    @Param('id') id: string,
+    @Body() dto: PreviewInvoiceDocumentTemplateDto,
+  ): Promise<InvoiceDocumentTemplatePreviewResponseDto> {
+    return this.documentTemplatesService.preview(id, dto);
   }
 
   @Get()
