@@ -35,6 +35,11 @@ import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.d
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductResponseDto } from './dto/product-response.dto';
 import { UpsertProductTechnicalSheetDto } from './dto/upsert-product-technical-sheet.dto';
+import {
+  DeleteProductImageResponseDto,
+  ProductImageResponseDto,
+  ReplaceProductImageResponseDto,
+} from './dto/product-image-response.dto';
 import { UploadProductImagesDto } from './dto/upload-product-images.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
@@ -86,8 +91,12 @@ export class ProductsController {
 
   @Get(':id/images')
   @ApiOperation({ summary: 'Lister les images d\'un produit' })
-  @ApiOkResponse({ description: 'Images du produit' })
-  listImages(@Param('id') id: string) {
+  @ApiOkResponse({
+    description: 'Images du produit',
+    type: ProductImageResponseDto,
+    isArray: true,
+  })
+  listImages(@Param('id') id: string): Promise<ProductImageResponseDto[]> {
     return this.productsService.listImages(id);
   }
 
@@ -118,13 +127,17 @@ export class ProductsController {
       required: ['files'],
     },
   })
-  @ApiCreatedResponse({ description: 'Images uploadées' })
+  @ApiCreatedResponse({
+    description: 'Images uploadées',
+    type: ProductImageResponseDto,
+    isArray: true,
+  })
   uploadImages(
     @Param('id') id: string,
     @Body() _dto: UploadProductImagesDto,
     @UploadedFiles() files: Express.Multer.File[],
     @CurrentUser() user: JwtAccessPayload,
-  ) {
+  ): Promise<ProductImageResponseDto[]> {
     return this.productsService.uploadImages(id, files, user.sub);
   }
 
@@ -164,23 +177,30 @@ export class ProductsController {
       required: ['file'],
     },
   })
+  @ApiCreatedResponse({
+    description: 'Image remplacée',
+    type: ReplaceProductImageResponseDto,
+  })
   replaceImage(
     @Param('id') id: string,
     @Param('imageId') imageId: string,
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: JwtAccessPayload,
-  ) {
+  ): Promise<ReplaceProductImageResponseDto> {
     return this.productsService.replaceImage(id, imageId, file, user.sub);
   }
 
   @Delete(':id/images/:imageId')
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Supprimer une image produit' })
-  @ApiOkResponse({ description: 'Image supprimée' })
+  @ApiOkResponse({
+    description: 'Image supprimée',
+    type: DeleteProductImageResponseDto,
+  })
   deleteImage(
     @Param('id') id: string,
     @Param('imageId') imageId: string,
-  ) {
+  ): Promise<DeleteProductImageResponseDto> {
     return this.productsService.deleteImage(id, imageId);
   }
 

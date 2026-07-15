@@ -2,6 +2,7 @@ import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GlobalSearchQueryDto } from './dto/global-search-query.dto';
+import { GlobalSearchResponseDto } from './dto/global-search-response.dto';
 import { SearchService } from './search.service';
 
 @ApiTags('Global Search')
@@ -17,8 +18,11 @@ export class SearchController {
     description:
       'Recherche transversale optimisee avec filtres avances, multi-entites et limites par entite.',
   })
-  @ApiOkResponse({ description: 'Resultats agregees par entite' })
-  global(@Query() query: GlobalSearchQueryDto) {
+  @ApiOkResponse({
+    description: 'Resultats agregees par entite',
+    type: GlobalSearchResponseDto,
+  })
+  global(@Query() query: GlobalSearchQueryDto): Promise<GlobalSearchResponseDto> {
     return this.searchService.globalSearch(query);
   }
 }

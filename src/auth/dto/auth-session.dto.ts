@@ -3,17 +3,17 @@ import { AuthUserDto } from './auth-user.dto';
 
 export class AuthSessionDto {
   @ApiProperty({ type: () => AuthUserDto })
-  user: AuthUserDto;
+  user!: AuthUserDto;
 
-  @ApiProperty()
-  accessToken: string;
+  @ApiProperty({ type: String, example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  accessToken!: string;
 
-  @ApiProperty()
-  refreshToken: string;
+  @ApiProperty({ type: String })
+  refreshToken!: string;
 
-  @ApiProperty({ example: 'Bearer' })
-  tokenType: 'Bearer';
+  @ApiProperty({ type: String, example: 'Bearer' })
+  tokenType!: 'Bearer';
 
-  @ApiProperty({ example: '15m' })
-  expiresIn: string;
+  @ApiProperty({ type: String, example: '15m' })
+  expiresIn!: string;
 }

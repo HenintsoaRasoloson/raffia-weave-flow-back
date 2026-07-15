@@ -37,6 +37,7 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceResponseDto } from './dto/invoice-response.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { UploadInvoiceDocumentDto } from './dto/upload-invoice-document.dto';
+import { InvoiceTemplateResponseDto } from './dto/invoice-template-response.dto';
 import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoicesService } from './invoices.service';
@@ -54,26 +55,36 @@ export class InvoicesController {
 
   @Get('templates')
   @ApiOperation({ summary: 'Lister les templates de facture configurés' })
-  @ApiOkResponse({ description: 'Templates de facture' })
-  listTemplates() {
+  @ApiOkResponse({
+    description: 'Templates de facture',
+    type: InvoiceTemplateResponseDto,
+    isArray: true,
+  })
+  listTemplates(): Promise<InvoiceTemplateResponseDto[]> {
     return this.invoicesService.listTemplates();
   }
 
   @Get('templates/:type')
   @ApiOperation({ summary: 'Récupérer le template d\'un type de facture' })
-  @ApiOkResponse({ description: 'Template trouvé' })
-  getTemplate(@Param('type') type: string) {
+  @ApiOkResponse({
+    description: 'Template trouvé',
+    type: InvoiceTemplateResponseDto,
+  })
+  getTemplate(@Param('type') type: string): Promise<InvoiceTemplateResponseDto> {
     return this.invoicesService.getTemplate(type);
   }
 
   @Put('templates/:type')
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Créer ou mettre à jour le template d\'un type de facture' })
-  @ApiOkResponse({ description: 'Template upserté' })
+  @ApiOkResponse({
+    description: 'Template upserté',
+    type: InvoiceTemplateResponseDto,
+  })
   upsertTemplate(
     @Param('type') type: string,
     @Body() dto: UpsertInvoiceTemplateDto,
-  ) {
+  ): Promise<InvoiceTemplateResponseDto> {
     return this.invoicesService.upsertTemplate(type, dto);
   }
 

@@ -20,28 +20,19 @@ import {
   resolveFrenchTextSearchIds,
 } from '../common/query/search.util';
 import { GlobalSearchQueryDto } from './dto/global-search-query.dto';
+import {
+  GlobalSearchResponseDto,
+  SearchEntityName,
+  SearchHitResponseDto,
+} from './dto/global-search-response.dto';
 
 const ALL_ENTITIES = GlobalSearchQueryDto.AllowedEntities;
-
-type SearchEntity = (typeof ALL_ENTITIES)[number];
-
-type SearchHit = {
-  entity: SearchEntity;
-  id: string;
-  label: string;
-  secondary?: string;
-  reference?: string;
-  status?: string;
-  type?: string;
-  referenceLevel?: number | null;
-  createdAt?: Date;
-};
 
 @Injectable()
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async globalSearch(query: GlobalSearchQueryDto) {
+  async globalSearch(query: GlobalSearchQueryDto): Promise<GlobalSearchResponseDto> {
     const startedAt = Date.now();
     const q = prepareSearchTerm(query.q) ?? '';
     const limit = query.limit ?? 8;
@@ -58,7 +49,7 @@ export class SearchService {
 
     const createdAtFilter = this.buildCreatedAtFilter(query.dateFrom, query.dateTo);
 
-    const tasks: Promise<[SearchEntity, SearchHit[]]>[] = [];
+    const tasks: Promise<[SearchEntityName, SearchHitResponseDto[]]>[] = [];
 
     if (entities.includes('products')) {
       tasks.push(
@@ -175,7 +166,7 @@ export class SearchService {
     }
 
     const results = await Promise.all(tasks);
-    const grouped = Object.fromEntries(results) as Record<SearchEntity, SearchHit[]>;
+    const grouped = Object.fromEntries(results) as Record<SearchEntityName, SearchHitResponseDto[]>;
 
     const flat = results
       .flatMap(([, items]) => items)
@@ -201,7 +192,7 @@ export class SearchService {
     };
   }
 
-  private resolveEntities(rawEntities?: string): SearchEntity[] {
+  private resolveEntities(rawEntities?: string): SearchEntityName[] {
     if (!rawEntities?.trim()) {
       return [...ALL_ENTITIES];
     }
@@ -209,7 +200,7 @@ export class SearchService {
     const parsed = rawEntities
       .split(',')
       .map((v) => v.trim())
-      .filter(Boolean) as SearchEntity[];
+      .filter(Boolean) as SearchEntityName[];
 
     const invalid = parsed.filter((v) => !ALL_ENTITIES.includes(v));
     if (invalid.length) {
@@ -260,7 +251,7 @@ export class SearchService {
     status?: string;
     categoryId?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
-  }): Promise<SearchHit[]> {
+  }): Promise<SearchHitResponseDto[]> {
     const q = prepareSearchTerm(input.q);
     const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
     const nameIds = q
@@ -307,7 +298,7 @@ export class SearchService {
     limit: number;
     status?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
-  }): Promise<SearchHit[]> {
+  }): Promise<SearchHitResponseDto[]> {
     const q = prepareSearchTerm(input.q);
     const textWhere = q
       ? await buildFrenchTableTextWhere(this.prisma, 'Client', ['name', 'email', 'contactName'], q)
@@ -344,7 +335,7 @@ export class SearchService {
     q: string;
     limit: number;
     createdAtFilter?: { gte?: Date; lte?: Date };
-  }): Promise<SearchHit[]> {
+  }): Promise<SearchHitResponseDto[]> {
     const q = prepareSearchTerm(input.q);
     const textWhere = q
       ? await buildFrenchTableTextWhere(this.prisma, 'Supplier', ['name', 'email', 'category'], q)
@@ -381,7 +372,7 @@ export class SearchService {
     matchMode: 'contains' | 'exact';
     supplierId?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
-  }): Promise<SearchHit[]> {
+  }): Promise<SearchHitResponseDto[]> {
     const q = prepareSearchTerm(input.q);
     const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
     const nameIds = q
@@ -429,7 +420,7 @@ export class SearchService {
     clientId?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
     referenceLevel?: number;
-  }): Promise<SearchHit[]> {
+  }): Promise<SearchHitResponseDto[]> {
     const q = prepareSearchTerm(input.q);
     const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
     const clientIds = q
@@ -488,7 +479,7 @@ export class SearchService {
     clientId?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
     referenceLevel?: number;
-  }): Promise<SearchHit[]> {
+  }): Promise<SearchHitResponseDto[]> {
     const q = prepareSearchTerm(input.q);
     const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
     const clientIds = q
@@ -546,7 +537,7 @@ export class SearchService {
     clientId?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
     referenceLevel?: number;
-  }): Promise<SearchHit[]> {
+  }): Promise<SearchHitResponseDto[]> {
     const q = prepareSearchTerm(input.q);
     const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
     const clientIds = q
@@ -600,7 +591,7 @@ export class SearchService {
     status?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
     referenceLevel?: number;
-  }): Promise<SearchHit[]> {
+  }): Promise<SearchHitResponseDto[]> {
     const q = prepareSearchTerm(input.q);
     const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
     const productIds = q
@@ -654,7 +645,7 @@ export class SearchService {
     supplierId?: string;
     createdAtFilter?: { gte?: Date; lte?: Date };
     referenceLevel?: number;
-  }): Promise<SearchHit[]> {
+  }): Promise<SearchHitResponseDto[]> {
     const q = prepareSearchTerm(input.q);
     const textMatch = q ? this.buildStringMatch(q, input.matchMode) : undefined;
     const supplierIds = q

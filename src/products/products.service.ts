@@ -22,6 +22,11 @@ import { GedPathsService } from '../ged/ged-paths.service';
 import { MinioService } from '../ged/minio.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
+import {
+  DeleteProductImageResponseDto,
+  ProductImageResponseDto,
+  ReplaceProductImageResponseDto,
+} from './dto/product-image-response.dto';
 import { UpsertProductTechnicalSheetDto } from './dto/upsert-product-technical-sheet.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
@@ -115,7 +120,7 @@ export class ProductsService {
       });
   }
 
-  async listImages(productId: string) {
+  async listImages(productId: string): Promise<ProductImageResponseDto[]> {
     await this.ensureProductExists(productId);
     return this.prisma.productImage
       .findMany({
@@ -228,7 +233,7 @@ export class ProductsService {
     files: Express.Multer.File[],
     userId?: string,
     options?: { version?: number; documentType?: string },
-  ) {
+  ): Promise<ProductImageResponseDto[]> {
     await this.ensureProductExists(productId);
     if (!files?.length) {
       throw new BadRequestException('Aucun fichier image reçu.');
@@ -295,7 +300,7 @@ export class ProductsService {
     imageId: string,
     file: Express.Multer.File,
     userId?: string,
-  ) {
+  ): Promise<ReplaceProductImageResponseDto> {
     const existing = await this.prisma.productImage.findFirst({
       where: { id: imageId, productId },
     });
@@ -322,7 +327,10 @@ export class ProductsService {
     };
   }
 
-  async deleteImage(productId: string, imageId: string) {
+  async deleteImage(
+    productId: string,
+    imageId: string,
+  ): Promise<DeleteProductImageResponseDto> {
     const image = await this.prisma.productImage.findFirst({
       where: { id: imageId, productId },
     });

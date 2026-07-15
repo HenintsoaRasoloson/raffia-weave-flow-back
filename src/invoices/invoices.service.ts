@@ -23,6 +23,7 @@ import { MinioService } from '../ged/minio.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { UploadInvoiceDocumentDto } from './dto/upload-invoice-document.dto';
+import { InvoiceTemplateResponseDto } from './dto/invoice-template-response.dto';
 import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 
@@ -251,11 +252,11 @@ export class InvoicesService {
     };
   }
 
-  listTemplates() {
+  listTemplates(): Promise<InvoiceTemplateResponseDto[]> {
     return this.prisma.invoiceTemplate.findMany({ orderBy: { type: 'asc' } });
   }
 
-  async getTemplate(type: string) {
+  async getTemplate(type: string): Promise<InvoiceTemplateResponseDto> {
     const normalizedType = this.normalizeInvoiceType(type);
 
     const existing = await this.prisma.invoiceTemplate.findUnique({
@@ -277,7 +278,10 @@ export class InvoicesService {
     };
   }
 
-  upsertTemplate(type: string, dto: UpsertInvoiceTemplateDto) {
+  upsertTemplate(
+    type: string,
+    dto: UpsertInvoiceTemplateDto,
+  ): Promise<InvoiceTemplateResponseDto> {
     const normalizedType = this.normalizeInvoiceType(type);
 
     return this.prisma.invoiceTemplate.upsert({

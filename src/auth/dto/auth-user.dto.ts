@@ -1,16 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AuthUserDto {
-  @ApiProperty()
-  id: string;
+  @ApiProperty({ type: String, example: 'usr123' })
+  id!: string;
 
-  @ApiProperty()
-  email: string;
+  @ApiProperty({ type: String, example: 'admin@raffia.test' })
+  email!: string;
 
-  @ApiProperty({ required: false, nullable: true })
-  name: string | null;
+  @ApiProperty({ type: String, required: false, nullable: true, example: 'Admin' })
+  name!: string | null;
 
   @ApiProperty({
+    type: String,
     enum: [
       'GERANT',
       'RESPONSABLE_GENERAL',
@@ -19,14 +20,14 @@ export class AuthUserDto {
       'RESPONSABLE_FINANCIER_STOCKS',
     ],
   })
-  role: string;
+  role!: string;
 
-  @ApiProperty()
-  isAdmin: boolean;
+  @ApiProperty({ type: Boolean, example: true })
+  isAdmin!: boolean;
 
-  @ApiProperty()
-  createdAt: Date;
+  @ApiProperty({ type: String, format: 'date-time' })
+  createdAt!: Date;
 
-  @ApiProperty()
-  updatedAt: Date;
+  @ApiProperty({ type: String, format: 'date-time' })
+  updatedAt!: Date;
 }

@@ -1,31 +1,14 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-type LookupResult = {
-  level: number;
-  matchedBy: 'level' | 'ref';
-  sourceRef?: string;
-  salesOrder: unknown | null;
-  invoices: unknown[];
-  deliveries: unknown[];
-  productionOrders: unknown[];
-  purchaseOrders: unknown[];
-  related: {
-    salesOrderItems: unknown[];
-    batDocuments: unknown[];
-    invoiceItems: unknown[];
-    invoicePayments: unknown[];
-    invoiceDocuments: unknown[];
-    purchaseOrderItems: unknown[];
-    productionSteps: unknown[];
-  };
-};
-
 @Injectable()
 export class ReferenceLookupService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByLevelOrRef(input: { level?: number; ref?: string }): Promise<LookupResult> {
+  async findByLevelOrRef(input: {
+    level?: number;
+    ref?: string;
+  }) {
     const level = this.resolveLevel(input);
 
     const [

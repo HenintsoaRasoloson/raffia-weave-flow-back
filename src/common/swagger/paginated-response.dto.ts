@@ -4,12 +4,12 @@ export class PaginatedResponseDto<TData> {
   @ApiProperty({ type: 'array', items: { type: 'object' } })
   items!: TData[];
 
-  @ApiProperty({ example: 125 })
+  @ApiProperty({ type: Number, example: 125 })
   total!: number;
 
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ type: Number, example: 1 })
   page!: number;
 
-  @ApiProperty({ example: 20 })
+  @ApiProperty({ type: Number, example: 20 })
   pageSize!: number;
 }

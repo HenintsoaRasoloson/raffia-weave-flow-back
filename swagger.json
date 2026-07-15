@@ -1,0 +1,3382 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/search/global": {
+      "get": {
+        "description": "Recherche transversale optimisee avec filtres avances, multi-entites et limites par entite.",
+        "operationId": "SearchController_global",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Texte de recherche global (header search).",
+            "schema": {
+              "example": "PRO/000188",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entities",
+            "required": false,
+            "in": "query",
+            "description": "Liste d entites ciblees. Valeurs separees par virgules. Exemple: products,invoices,salesOrders",
+            "schema": {
+              "example": "products,invoices,salesOrders",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Nombre max de resultats par entite.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 25,
+              "default": 8,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filtre de statut (avance).",
+            "schema": {
+              "example": "ACTIVE",
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filtre de type (avance).",
+            "schema": {
+              "example": "PROFORMA",
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": false,
+            "in": "query",
+            "description": "Date debut creation (ISO, avance).",
+            "schema": {
+              "example": "2026-01-01T00:00:00.000Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": false,
+            "in": "query",
+            "description": "Date fin creation (ISO, avance).",
+            "schema": {
+              "example": "2026-12-31T23:59:59.999Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "referenceLevel",
+            "required": false,
+            "in": "query",
+            "description": "Filtre niveau de reference metier (avance).",
+            "schema": {
+              "example": 188,
+              "type": "number"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre client (avance).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "supplierId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre fournisseur (avance).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre categorie produit (avance).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "matchMode",
+            "required": false,
+            "in": "query",
+            "description": "Mode strict sur les references. exact = egalite exacte sur les champs reference.",
+            "schema": {
+              "default": "contains",
+              "type": "string",
+              "enum": [
+                "contains",
+                "exact"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultats agregees par entite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSearchResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recherche globale application (header)",
+        "tags": [
+          "Global Search"
+        ]
+      }
+    },
+    "/reference-lookup": {
+      "get": {
+        "description": "Recherche toutes les entites liees a un meme niveau de reference (commande, factures, livraisons, OF, achats et sous-elements).",
+        "operationId": "ReferenceLookupController_find",
+        "parameters": [
+          {
+            "name": "level",
+            "required": false,
+            "in": "query",
+            "description": "Niveau de reference numerique (ex: 188).",
+            "schema": {
+              "example": 188,
+              "type": "number"
+            }
+          },
+          {
+            "name": "ref",
+            "required": false,
+            "in": "query",
+            "description": "Reference complete (ex: CMD/000188, PRO/000188, LIV/000188...).",
+            "schema": {
+              "example": "PRO/000188",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultat agrege de recherche par reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferenceLookupResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recherche transversale par reference metier",
+        "tags": [
+          "Reference Lookup"
+        ]
+      }
+    },
+    "/audit-logs/entity/{entityType}/{entityId}": {
+      "get": {
+        "description": "Retourne tous les changements enregistrés pour une entité (SalesOrder, Invoice, ProductionOrder, etc.)",
+        "operationId": "AuditController_getEntityLogs",
+        "parameters": [
+          {
+            "name": "entityType",
+            "required": true,
+            "in": "path",
+            "description": "Type d’entité (ex. SalesOrder, Invoice)",
+            "schema": {
+              "example": "SalesOrder",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "description": "Identifiant de l’entité",
+            "schema": {
+              "example": "so123",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Nombre max de logs retournés",
+            "schema": {
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50,
+              "example": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit logs de l'entité",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditLogResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Historique d'audit d'une entité",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/audit-logs/user/{userId}": {
+      "get": {
+        "description": "Retourne toutes les actions qu'a effectuées un utilisateur",
+        "operationId": "AuditController_getUserLogs",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "description": "Identifiant utilisateur",
+            "schema": {
+              "example": "usr123",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Nombre max de logs retournés",
+            "schema": {
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50,
+              "example": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit logs de l'utilisateur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditLogResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Actions d'un utilisateur",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/audit-logs": {
+      "get": {
+        "description": "Retourne tous les audit logs avec filtres optionnels. Requiert le rôle ADMIN.",
+        "operationId": "AuditController_getAllLogs",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Nombre max de logs retournés",
+            "schema": {
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50,
+              "example": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "entityType",
+            "required": false,
+            "in": "query",
+            "description": "Filtrer par type d’entité",
+            "schema": {
+              "example": "SalesOrder",
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "Filtrer par action (enum AuditAction)",
+            "schema": {
+              "example": "SALES_ORDER_CREATED",
+              "type": "string",
+              "enum": [
+                "SALES_ORDER_CREATED",
+                "SALES_ORDER_STATUS_CHANGED",
+                "SALES_ORDER_BAT_SENT",
+                "SALES_ORDER_BAT_APPROVED",
+                "INVOICE_CREATED",
+                "INVOICE_PAYMENT_RECORDED",
+                "INVOICE_MARKED_PAID",
+                "PRODUCTION_ORDER_CREATED",
+                "PRODUCTION_ORDER_PROGRESS_UPDATED",
+                "PRODUCTION_ORDER_QUALITY_APPROVED",
+                "PURCHASE_ORDER_CREATED",
+                "PURCHASE_ORDER_STATUS_CHANGED",
+                "DELIVERY_CREATED",
+                "DELIVERY_MARKED_DELIVERED"
+              ]
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "Filtrer par utilisateur",
+            "schema": {
+              "example": "usr123",
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Début de période (ISO)",
+            "schema": {
+              "example": "2026-01-01T00:00:00.000Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "Fin de période (ISO)",
+            "schema": {
+              "example": "2026-12-31T23:59:59.999Z",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tous les audit logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditLogResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Journal d'audit complet (admin)",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/invoices/templates": {
+      "get": {
+        "operationId": "InvoicesController_listTemplates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Templates de facture",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InvoiceTemplateResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lister les templates de facture configurés",
+        "tags": [
+          "Factures"
+        ]
+      }
+    },
+    "/invoices/templates/{type}": {
+      "get": {
+        "operationId": "InvoicesController_getTemplate",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template trouvé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceTemplateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Récupérer le template d'un type de facture",
+        "tags": [
+          "Factures"
+        ]
+      },
+      "put": {
+        "operationId": "InvoicesController_upsertTemplate",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertInvoiceTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template upserté",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceTemplateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Créer ou mettre à jour le template d'un type de facture",
+        "tags": [
+          "Factures"
+        ]
+      }
+    },
+    "/invoices": {
+      "get": {
+        "operationId": "InvoicesController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Recherche textuelle",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filtre de statut",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filtre de type / origine / role selon le module",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": false,
+            "in": "query",
+            "description": "Date debut (ISO). Champ cible selon le module (createdAt, orderDate, issueDate...).",
+            "schema": {
+              "example": "2026-01-01T00:00:00.000Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": false,
+            "in": "query",
+            "description": "Date fin (ISO). Champ cible selon le module (createdAt, orderDate, issueDate...).",
+            "schema": {
+              "example": "2026-12-31T23:59:59.999Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre client (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ownership",
+            "required": false,
+            "in": "query",
+            "description": "Filtre propriété produit (COMPANY = catalogue, CLIENT = modèle client). Utilisé avec clientId = ownerClientId pour les modèles d'un client.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "COMPANY",
+                "CLIENT"
+              ]
+            }
+          },
+          {
+            "name": "supplierId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre fournisseur (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre categorie produit (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre produit (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "salesOrderId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre commande de vente (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "componentId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre composant / matiere (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "required": false,
+            "in": "query",
+            "description": "Filtre actif (ex. couleurs). true/false.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "Champ de tri whitelisté côté service (ex. createdAt, name, orderDate).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "description": "Sens de tri",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "includeVariants",
+            "required": false,
+            "in": "query",
+            "description": "Inclure les variantes dans la liste (false par defaut)",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "fields",
+            "required": false,
+            "in": "query",
+            "description": "Niveau de detail des lignes retournees. compact = payload minimum, full = payload complet.",
+            "schema": {
+              "default": "full",
+              "type": "string",
+              "enum": [
+                "compact",
+                "full"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste paginee des factures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/PaginatedResponseDto"
+                    },
+                    {
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/InvoiceResponseDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lister les factures",
+        "tags": [
+          "Factures"
+        ]
+      },
+      "post": {
+        "operationId": "InvoicesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Facture créée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Créer une facture",
+        "tags": [
+          "Factures"
+        ]
+      }
+    },
+    "/invoices/{id}": {
+      "get": {
+        "operationId": "InvoicesController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Facture trouvée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Récupérer une facture",
+        "tags": [
+          "Factures"
+        ]
+      },
+      "patch": {
+        "operationId": "InvoicesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInvoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Facture mise à jour",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mettre à jour une facture",
+        "tags": [
+          "Factures"
+        ]
+      },
+      "delete": {
+        "operationId": "InvoicesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Facture supprimée"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Supprimer une facture",
+        "tags": [
+          "Factures"
+        ]
+      }
+    },
+    "/invoices/{id}/documents": {
+      "get": {
+        "operationId": "InvoicesController_listDocuments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Documents de la facture"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lister les fichiers uploadés sur une facture",
+        "tags": [
+          "Factures"
+        ]
+      },
+      "post": {
+        "operationId": "InvoicesController_uploadDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "SIGNED",
+                      "STAMPED",
+                      "SIGNED_AND_STAMPED",
+                      "OTHER"
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Document uploadé"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Uploader une facture signée/cachetée (PDF ou image)",
+        "tags": [
+          "Factures"
+        ]
+      }
+    },
+    "/invoices/{id}/documents/{documentId}/download": {
+      "get": {
+        "operationId": "InvoicesController_downloadDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ID facture",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "description": "ID document facture",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Télécharger un document uploadé (signé/cacheté)",
+        "tags": [
+          "Factures"
+        ]
+      }
+    },
+    "/invoices/{id}/documents/{documentId}/replace": {
+      "post": {
+        "operationId": "InvoicesController_replaceDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remplacer un document facture (nouvelle version)",
+        "tags": [
+          "Factures"
+        ]
+      }
+    },
+    "/invoices/{id}/documents/{documentId}": {
+      "delete": {
+        "operationId": "InvoicesController_deleteDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document facture supprimé"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Supprimer un document facture",
+        "tags": [
+          "Factures"
+        ]
+      }
+    },
+    "/invoices/{id}/mark-paid": {
+      "patch": {
+        "operationId": "InvoicesController_markPaid",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Facture marquée payée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Marquer une facture comme intégralement payée (raccourci)",
+        "tags": [
+          "Factures"
+        ]
+      }
+    },
+    "/invoices/{id}/record-payment": {
+      "post": {
+        "description": "Ajoute un montant encaissé. Passe automatiquement en PARTIALLY_PAID ou PAID selon si le total TTC est atteint.",
+        "operationId": "InvoicesController_recordPayment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordPaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Paiement enregistré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enregistrer un paiement (acompte ou solde)",
+        "tags": [
+          "Factures"
+        ]
+      }
+    },
+    "/products": {
+      "get": {
+        "description": "Par defaut, la liste est allegee (sans variantes). Ajoutez includeVariants=true pour inclure les variantes. Ajoutez fields=compact pour un payload minimum (id, ref, nom, statut, prix).",
+        "operationId": "ProductsController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Recherche textuelle",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filtre de statut",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filtre de type / origine / role selon le module",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": false,
+            "in": "query",
+            "description": "Date debut (ISO). Champ cible selon le module (createdAt, orderDate, issueDate...).",
+            "schema": {
+              "example": "2026-01-01T00:00:00.000Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": false,
+            "in": "query",
+            "description": "Date fin (ISO). Champ cible selon le module (createdAt, orderDate, issueDate...).",
+            "schema": {
+              "example": "2026-12-31T23:59:59.999Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre client (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ownership",
+            "required": false,
+            "in": "query",
+            "description": "Filtre propriété produit (COMPANY = catalogue, CLIENT = modèle client). Utilisé avec clientId = ownerClientId pour les modèles d'un client.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "COMPANY",
+                "CLIENT"
+              ]
+            }
+          },
+          {
+            "name": "supplierId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre fournisseur (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre categorie produit (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre produit (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "salesOrderId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre commande de vente (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "componentId",
+            "required": false,
+            "in": "query",
+            "description": "Filtre composant / matiere (avance)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "required": false,
+            "in": "query",
+            "description": "Filtre actif (ex. couleurs). true/false.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "Champ de tri whitelisté côté service (ex. createdAt, name, orderDate).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "description": "Sens de tri",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "includeVariants",
+            "required": false,
+            "in": "query",
+            "description": "Inclure les variantes dans la liste (false par defaut)",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "fields",
+            "required": false,
+            "in": "query",
+            "description": "Niveau de detail des lignes retournees. compact = payload minimum, full = payload complet.",
+            "schema": {
+              "default": "full",
+              "type": "string",
+              "enum": [
+                "compact",
+                "full"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste paginee des produits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/PaginatedResponseDto"
+                    },
+                    {
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ProductResponseDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lister les produits",
+        "tags": [
+          "Produits"
+        ]
+      },
+      "post": {
+        "operationId": "ProductsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Produit créé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Créer un produit",
+        "tags": [
+          "Produits"
+        ]
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "operationId": "ProductsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produit trouvé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Récupérer un produit",
+        "tags": [
+          "Produits"
+        ]
+      },
+      "patch": {
+        "operationId": "ProductsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Produit mis à jour",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mettre à jour un produit",
+        "tags": [
+          "Produits"
+        ]
+      },
+      "delete": {
+        "operationId": "ProductsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produit supprimé"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Supprimer un produit",
+        "tags": [
+          "Produits"
+        ]
+      }
+    },
+    "/products/{id}/technical-sheet": {
+      "get": {
+        "operationId": "ProductsController_getTechnicalSheet",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fiche technique du produit"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Récupérer la fiche technique atelier du produit",
+        "tags": [
+          "Produits"
+        ]
+      },
+      "post": {
+        "operationId": "ProductsController_upsertTechnicalSheet",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertProductTechnicalSheetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fiche technique enregistrée"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Créer ou mettre à jour la fiche technique (recette détaillée) du produit",
+        "tags": [
+          "Produits"
+        ]
+      }
+    },
+    "/products/{id}/images": {
+      "get": {
+        "operationId": "ProductsController_listImages",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Images du produit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductImageResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lister les images d'un produit",
+        "tags": [
+          "Produits"
+        ]
+      },
+      "post": {
+        "operationId": "ProductsController_uploadImages",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tag": {
+                    "type": "string"
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                },
+                "required": [
+                  "files"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Images uploadées",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductImageResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Uploader plusieurs images produit (compression active)",
+        "tags": [
+          "Produits"
+        ]
+      }
+    },
+    "/products/{id}/images/{imageId}": {
+      "get": {
+        "operationId": "ProductsController_getImage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "imageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lire une image produit (décompression à la volée)",
+        "tags": [
+          "Produits"
+        ]
+      },
+      "delete": {
+        "operationId": "ProductsController_deleteImage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "imageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image supprimée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteProductImageResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Supprimer une image produit",
+        "tags": [
+          "Produits"
+        ]
+      }
+    },
+    "/products/{id}/images/{imageId}/replace": {
+      "post": {
+        "operationId": "ProductsController_replaceImage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "imageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Image remplacée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplaceProductImageResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remplacer une image produit (nouvelle version)",
+        "tags": [
+          "Produits"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Raffia Weave Flow API",
+    "description": "Fragment OpenAPI des modules contractualisés (search/reference-lookup/audit/templates/images). Document complet: GET /{SWAGGER_PATH}-json sur l’API vivante.",
+    "version": "1.0.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "SearchHitResponseDto": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string",
+            "description": "Entité métier d’origine du hit",
+            "enum": [
+              "products",
+              "clients",
+              "suppliers",
+              "components",
+              "salesOrders",
+              "invoices",
+              "deliveries",
+              "productionOrders",
+              "purchaseOrders"
+            ],
+            "example": "products"
+          },
+          "id": {
+            "type": "string",
+            "example": "prd123"
+          },
+          "label": {
+            "type": "string",
+            "description": "Libellé principal affiché (nom, numéro de commande, etc.)",
+            "example": "Cabas Madagascar"
+          },
+          "secondary": {
+            "type": "string",
+            "description": "Informations secondaires (email, client, catégorie…)",
+            "example": "PRO/000188"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Référence métier quand disponible",
+            "example": "PRO/000188"
+          },
+          "status": {
+            "type": "string",
+            "example": "ACTIVE"
+          },
+          "type": {
+            "type": "string",
+            "description": "Type métier (ex. B2B, PROFORMA) quand applicable",
+            "example": "PROFORMA"
+          },
+          "referenceLevel": {
+            "type": "object",
+            "description": "Niveau de référence (ex. 188 pour CMD/000188)",
+            "example": 188,
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Date de création de l’entité",
+            "example": "2026-07-01T10:00:00.000Z"
+          }
+        },
+        "required": [
+          "entity",
+          "id",
+          "label"
+        ]
+      },
+      "GlobalSearchGroupedResponseDto": {
+        "type": "object",
+        "properties": {
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponseDto"
+            }
+          },
+          "clients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponseDto"
+            }
+          },
+          "suppliers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponseDto"
+            }
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponseDto"
+            }
+          },
+          "salesOrders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponseDto"
+            }
+          },
+          "invoices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponseDto"
+            }
+          },
+          "deliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponseDto"
+            }
+          },
+          "productionOrders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponseDto"
+            }
+          },
+          "purchaseOrders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponseDto"
+            }
+          }
+        }
+      },
+      "GlobalSearchResponseDto": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Terme de recherche normalisé utilisé",
+            "example": "PRO/000188"
+          },
+          "entities": {
+            "type": "array",
+            "description": "Entités réellement interrogées",
+            "example": [
+              "products",
+              "salesOrders"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "products",
+                "clients",
+                "suppliers",
+                "components",
+                "salesOrders",
+                "invoices",
+                "deliveries",
+                "productionOrders",
+                "purchaseOrders"
+              ]
+            }
+          },
+          "matchMode": {
+            "type": "string",
+            "description": "Mode de matching appliqué aux références",
+            "enum": [
+              "contains",
+              "exact"
+            ],
+            "example": "contains"
+          },
+          "tookMs": {
+            "type": "number",
+            "description": "Durée d’exécution côté serveur (ms)",
+            "example": 42
+          },
+          "total": {
+            "type": "number",
+            "description": "Nombre total de hits aplatis",
+            "example": 5
+          },
+          "counts": {
+            "type": "object",
+            "description": "Nombre de hits par entité",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "example": {
+              "products": 2,
+              "salesOrders": 3
+            }
+          },
+          "grouped": {
+            "description": "Hits regroupés par entité (clés = entités demandées)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GlobalSearchGroupedResponseDto"
+              }
+            ]
+          },
+          "results": {
+            "description": "Hits aplatis, triés par date de création décroissante",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitResponseDto"
+            }
+          }
+        },
+        "required": [
+          "query",
+          "entities",
+          "matchMode",
+          "tookMs",
+          "total",
+          "counts",
+          "grouped",
+          "results"
+        ]
+      },
+      "ReferenceLookupSalesOrderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "so123"
+          },
+          "referenceLevel": {
+            "type": "object",
+            "example": 188,
+            "nullable": true
+          },
+          "orderNumber": {
+            "type": "string",
+            "example": "CMD/000188"
+          },
+          "status": {
+            "type": "string",
+            "example": "TO_PROCESS"
+          },
+          "orderType": {
+            "type": "string",
+            "example": "B2B",
+            "enum": [
+              "B2B",
+              "B2C"
+            ]
+          },
+          "client": {
+            "type": "object",
+            "description": "Client associé (include Prisma)",
+            "additionalProperties": true,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "orderNumber",
+          "status",
+          "orderType"
+        ]
+      },
+      "ReferenceLookupInvoiceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "so123"
+          },
+          "referenceLevel": {
+            "type": "object",
+            "example": 188,
+            "nullable": true
+          },
+          "invoiceNumber": {
+            "type": "string",
+            "example": "FAC/000188"
+          },
+          "type": {
+            "type": "string",
+            "example": "PROFORMA"
+          },
+          "status": {
+            "type": "string",
+            "example": "DRAFT"
+          },
+          "client": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true
+          },
+          "salesOrder": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "invoiceNumber",
+          "type",
+          "status"
+        ]
+      },
+      "ReferenceLookupDeliveryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "so123"
+          },
+          "referenceLevel": {
+            "type": "object",
+            "example": 188,
+            "nullable": true
+          },
+          "deliveryNumber": {
+            "type": "string",
+            "example": "LIV/000188"
+          },
+          "status": {
+            "type": "string",
+            "example": "PENDING"
+          },
+          "client": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true
+          },
+          "salesOrder": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "deliveryNumber",
+          "status"
+        ]
+      },
+      "ReferenceLookupProductionOrderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "so123"
+          },
+          "referenceLevel": {
+            "type": "object",
+            "example": 188,
+            "nullable": true
+          },
+          "orderNumber": {
+            "type": "string",
+            "example": "OF/000188"
+          },
+          "status": {
+            "type": "string",
+            "example": "PLANNED"
+          },
+          "product": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true
+          },
+          "variant": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true
+          },
+          "salesOrder": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "orderNumber",
+          "status"
+        ]
+      },
+      "ReferenceLookupPurchaseOrderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "so123"
+          },
+          "referenceLevel": {
+            "type": "object",
+            "example": 188,
+            "nullable": true
+          },
+          "orderNumber": {
+            "type": "string",
+            "example": "ACH/000188"
+          },
+          "status": {
+            "type": "string",
+            "example": "DRAFT"
+          },
+          "supplier": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "orderNumber",
+          "status"
+        ]
+      },
+      "ReferenceLookupRelatedDto": {
+        "type": "object",
+        "properties": {
+          "salesOrderItems": {
+            "type": "array",
+            "description": "Lignes de commande au même niveau de référence",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "batDocuments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "invoiceItems": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "invoicePayments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "invoiceDocuments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "purchaseOrderItems": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "productionSteps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "salesOrderItems",
+          "batDocuments",
+          "invoiceItems",
+          "invoicePayments",
+          "invoiceDocuments",
+          "purchaseOrderItems",
+          "productionSteps"
+        ]
+      },
+      "ReferenceLookupResponseDto": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "Niveau de référence résolu",
+            "example": 188
+          },
+          "matchedBy": {
+            "type": "string",
+            "description": "Critère ayant servi à résoudre le niveau",
+            "enum": [
+              "level",
+              "ref"
+            ],
+            "example": "ref"
+          },
+          "sourceRef": {
+            "type": "string",
+            "description": "Référence source normalisée si fournie",
+            "example": "CMD/000188"
+          },
+          "salesOrder": {
+            "description": "Commande de vente au niveau demandé, ou null",
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReferenceLookupSalesOrderDto"
+              }
+            ]
+          },
+          "invoices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReferenceLookupInvoiceDto"
+            }
+          },
+          "deliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReferenceLookupDeliveryDto"
+            }
+          },
+          "productionOrders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReferenceLookupProductionOrderDto"
+            }
+          },
+          "purchaseOrders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReferenceLookupPurchaseOrderDto"
+            }
+          },
+          "related": {
+            "$ref": "#/components/schemas/ReferenceLookupRelatedDto"
+          }
+        },
+        "required": [
+          "level",
+          "matchedBy",
+          "invoices",
+          "deliveries",
+          "productionOrders",
+          "purchaseOrders",
+          "related"
+        ]
+      },
+      "AuditLogUserResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "usr123"
+          },
+          "email": {
+            "type": "string",
+            "example": "admin@raffia.test"
+          },
+          "name": {
+            "type": "object",
+            "example": "Admin Raffia",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "description": "Présent sur les listes entity / admin, absent sur user/:userId",
+            "enum": [
+              "GERANT",
+              "RESPONSABLE_GENERAL",
+              "RESPONSABLE_PRODUCTION",
+              "RESPONSABLE_LIVRAISON",
+              "RESPONSABLE_FINANCIER_STOCKS"
+            ],
+            "example": "GERANT"
+          }
+        },
+        "required": [
+          "id",
+          "email"
+        ]
+      },
+      "AuditLogResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "aud123"
+          },
+          "entityType": {
+            "type": "string",
+            "description": "Type d’entité auditée",
+            "example": "SalesOrder"
+          },
+          "entityId": {
+            "type": "string",
+            "example": "so123"
+          },
+          "action": {
+            "type": "string",
+            "description": "Action auditée (enum AuditAction Prisma)",
+            "example": "SALES_ORDER_STATUS_CHANGED"
+          },
+          "userId": {
+            "type": "string",
+            "example": "usr123"
+          },
+          "user": {
+            "description": "Utilisateur à l’origine de l’action",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuditLogUserResponseDto"
+              }
+            ]
+          },
+          "changes": {
+            "type": "object",
+            "description": "Diff JSON des champs modifiés (before/after)",
+            "nullable": true,
+            "additionalProperties": true,
+            "example": {
+              "before": {
+                "status": "TO_PROCESS"
+              },
+              "after": {
+                "status": "IN_PRODUCTION"
+              }
+            }
+          },
+          "details": {
+            "type": "object",
+            "description": "Détail libre (raison, référence…)",
+            "nullable": true,
+            "example": "Passage en production"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-01T10:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "entityType",
+          "entityId",
+          "action",
+          "userId",
+          "user",
+          "createdAt"
+        ]
+      },
+      "InvoiceTemplateResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Absent lorsque le template par défaut non persisté est renvoyé",
+            "example": "tpl123"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "PROFORMA",
+              "DEPOSIT",
+              "INTERMEDIATE",
+              "FINAL",
+              "CREDIT_NOTE"
+            ],
+            "example": "FINAL"
+          },
+          "name": {
+            "type": "string",
+            "example": "Template facture finale"
+          },
+          "subject": {
+            "type": "object",
+            "example": "Facture {{invoiceNumber}} - {{companyName}}",
+            "nullable": true
+          },
+          "body": {
+            "type": "string",
+            "example": "Bonjour {{clientName}},\n\nVeuillez trouver votre facture {{invoiceNumber}}."
+          },
+          "footer": {
+            "type": "object",
+            "example": "Raffia Weave Flow",
+            "nullable": true
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "true si template synthétique (non encore persisté en base)",
+            "example": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-01T10:00:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-02T10:00:00.000Z"
+          }
+        },
+        "required": [
+          "type",
+          "name",
+          "body"
+        ]
+      },
+      "UpsertInvoiceTemplateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Template facture finale premium",
+            "description": "Nom lisible du template utilisé pour ce type de facture"
+          },
+          "subject": {
+            "type": "string",
+            "example": "Facture {{invoiceNumber}} - {{companyName}}",
+            "description": "Sujet email suggéré lors de l'envoi de la facture"
+          },
+          "body": {
+            "type": "string",
+            "example": "Bonjour {{clientName}},\n\nVeuillez trouver votre facture {{invoiceNumber}} de {{totalTtc}} {{currency}}.",
+            "description": "Corps du template. Vous pouvez y mettre vos placeholders ({{invoiceNumber}}, {{clientName}}, etc.)."
+          },
+          "footer": {
+            "type": "string",
+            "example": "Raffia Weave Flow - Merci pour votre confiance.",
+            "description": "Pied de page du template"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ]
+      },
+      "PaginatedResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 125
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "example": 20
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "InvoiceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "inv123"
+          },
+          "invoiceNumber": {
+            "type": "string",
+            "example": "FAC-2026-0421"
+          },
+          "type": {
+            "type": "string",
+            "example": "FINAL"
+          },
+          "status": {
+            "type": "string",
+            "example": "ISSUED"
+          },
+          "totalTtc": {
+            "type": "number",
+            "example": 9792
+          }
+        },
+        "required": [
+          "id",
+          "invoiceNumber",
+          "type",
+          "status",
+          "totalTtc"
+        ]
+      },
+      "CreateInvoiceItemDto": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "example": "Cabas Madagascar - Terracotta"
+          },
+          "quantity": {
+            "type": "number",
+            "example": 40
+          },
+          "unitPriceHt": {
+            "type": "number",
+            "example": 89
+          },
+          "taxRate": {
+            "type": "number",
+            "example": 20
+          },
+          "salesOrderItemId": {
+            "type": "string",
+            "example": "clx-sales-order-item-id"
+          },
+          "productId": {
+            "type": "string",
+            "example": "clx-product-id"
+          },
+          "variantId": {
+            "type": "string",
+            "example": "clx-variant-id"
+          }
+        },
+        "required": [
+          "description",
+          "quantity",
+          "unitPriceHt"
+        ]
+      },
+      "CreateInvoiceDto": {
+        "type": "object",
+        "properties": {
+          "invoiceNumber": {
+            "type": "string",
+            "example": "PRO/000188",
+            "description": "Reference facture. Si absente, elle est generee automatiquement selon le type."
+          },
+          "type": {
+            "type": "string",
+            "example": "FINAL",
+            "enum": [
+              "PROFORMA",
+              "DEPOSIT",
+              "INTERMEDIATE",
+              "FINAL",
+              "CREDIT_NOTE"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "example": "ISSUED",
+            "enum": [
+              "DRAFT",
+              "ISSUED",
+              "SENT",
+              "PAID",
+              "PARTIALLY_PAID",
+              "OVERDUE",
+              "CANCELLED"
+            ]
+          },
+          "clientId": {
+            "type": "string",
+            "example": "clx-client-id"
+          },
+          "salesOrderId": {
+            "type": "string",
+            "example": "clx-sales-order-id"
+          },
+          "issueDate": {
+            "type": "string",
+            "example": "2026-09-18T00:00:00.000Z"
+          },
+          "dueDate": {
+            "type": "string",
+            "example": "2026-10-18T00:00:00.000Z"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateInvoiceItemDto"
+            }
+          },
+          "currency": {
+            "type": "string",
+            "example": "EUR"
+          },
+          "notes": {
+            "type": "string",
+            "example": "Facture finale collection hiver"
+          }
+        },
+        "required": [
+          "type",
+          "clientId",
+          "issueDate"
+        ]
+      },
+      "UpdateInvoiceDto": {
+        "type": "object",
+        "properties": {
+          "invoiceNumber": {
+            "type": "string",
+            "example": "PRO/000188",
+            "description": "Reference facture. Si absente, elle est generee automatiquement selon le type."
+          },
+          "type": {
+            "type": "string",
+            "example": "FINAL",
+            "enum": [
+              "PROFORMA",
+              "DEPOSIT",
+              "INTERMEDIATE",
+              "FINAL",
+              "CREDIT_NOTE"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "example": "ISSUED",
+            "enum": [
+              "DRAFT",
+              "ISSUED",
+              "SENT",
+              "PAID",
+              "PARTIALLY_PAID",
+              "OVERDUE",
+              "CANCELLED"
+            ]
+          },
+          "clientId": {
+            "type": "string",
+            "example": "clx-client-id"
+          },
+          "salesOrderId": {
+            "type": "string",
+            "example": "clx-sales-order-id"
+          },
+          "issueDate": {
+            "type": "string",
+            "example": "2026-09-18T00:00:00.000Z"
+          },
+          "dueDate": {
+            "type": "string",
+            "example": "2026-10-18T00:00:00.000Z"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateInvoiceItemDto"
+            }
+          },
+          "currency": {
+            "type": "string",
+            "example": "EUR"
+          },
+          "notes": {
+            "type": "string",
+            "example": "Facture finale collection hiver"
+          }
+        }
+      },
+      "RecordPaymentDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "Montant encaissé (ex: acompte 30%, solde final, etc.)",
+            "example": 450
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": [
+              "CASH",
+              "BANK_TRANSFER",
+              "CHECK",
+              "MOBILE_MONEY",
+              "CARD"
+            ],
+            "description": "Mode de paiement utilisé par le client",
+            "example": "BANK_TRANSFER"
+          },
+          "paidAt": {
+            "type": "string",
+            "description": "Date du paiement (défaut: maintenant)",
+            "example": "2026-07-10T10:00:00.000Z"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Note libre (référence virement, numéro chèque, etc.)"
+          }
+        },
+        "required": [
+          "amount",
+          "paymentMethod"
+        ]
+      },
+      "ProductResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "prd123"
+          },
+          "ref": {
+            "type": "string",
+            "example": "RAF-CAB-001"
+          },
+          "name": {
+            "type": "string",
+            "example": "Cabas Madagascar"
+          },
+          "basePrice": {
+            "type": "number",
+            "example": 89
+          },
+          "status": {
+            "type": "string",
+            "example": "ACTIVE"
+          },
+          "ownership": {
+            "type": "string",
+            "example": "COMPANY",
+            "enum": [
+              "COMPANY",
+              "CLIENT"
+            ],
+            "description": "COMPANY = catalogue / vente. CLIENT = modèle propriété d'un client."
+          },
+          "ownerClientId": {
+            "type": "object",
+            "example": null,
+            "nullable": true,
+            "description": "Client propriétaire si ownership = CLIENT."
+          }
+        },
+        "required": [
+          "id",
+          "ref",
+          "name",
+          "basePrice",
+          "status",
+          "ownership",
+          "ownerClientId"
+        ]
+      },
+      "UpsertProductTechnicalSheetElementDto": {
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "number",
+            "example": 1,
+            "description": "Ordre de l'élément dans la fiche"
+          },
+          "name": {
+            "type": "string",
+            "example": "Crochet principal"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "CROCHET",
+              "RAPHIA",
+              "LEATHER",
+              "ACCESSORY",
+              "LINING",
+              "HANDLE",
+              "HARDWARE",
+              "LABEL",
+              "PACKAGING",
+              "OTHER"
+            ],
+            "example": "CROCHET"
+          },
+          "componentType": {
+            "type": "string",
+            "example": "Crochet tunisien #3"
+          },
+          "material": {
+            "type": "string",
+            "example": "Raphia naturel premium"
+          },
+          "color": {
+            "type": "string",
+            "example": "Terracotta"
+          },
+          "dimensions": {
+            "type": "string",
+            "example": "L=32cm; H=26cm; P=12cm"
+          },
+          "sizeLabel": {
+            "type": "string",
+            "example": "M"
+          },
+          "quantity": {
+            "type": "number",
+            "example": 2.5
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "KG",
+              "M2",
+              "M",
+              "PCS",
+              "BOBBIN"
+            ],
+            "example": "PCS"
+          },
+          "isOptional": {
+            "type": "boolean",
+            "example": false
+          },
+          "notes": {
+            "type": "string",
+            "example": "Toujours commencer par ce composant en atelier"
+          }
+        },
+        "required": [
+          "sequence",
+          "name",
+          "category"
+        ]
+      },
+      "UpsertProductTechnicalSheetDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Fiche Technique Cabas Madagascar - V1"
+          },
+          "instructions": {
+            "type": "string",
+            "example": "1) Préparer le raphia. 2) Crochet base. 3) Monter les poignées cuir. 4) Contrôle qualité."
+          },
+          "workshopNotes": {
+            "type": "string",
+            "example": "Respecter la tension de crochet sur les 3 premières rangées pour garder la forme du sac."
+          },
+          "elements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpsertProductTechnicalSheetElementDto"
+            }
+          }
+        },
+        "required": [
+          "elements"
+        ]
+      },
+      "ProductImageResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "img123"
+          },
+          "productId": {
+            "type": "string",
+            "example": "prd123"
+          },
+          "originalName": {
+            "type": "string",
+            "example": "cabas-front.jpg"
+          },
+          "mimeType": {
+            "type": "string",
+            "example": "image/jpeg"
+          },
+          "bucket": {
+            "type": "object",
+            "description": "Bucket MinIO quand le stockage objet est actif",
+            "nullable": true,
+            "example": "raffia-ged-raw"
+          },
+          "objectKey": {
+            "type": "object",
+            "description": "Clé objet MinIO",
+            "nullable": true,
+            "example": "admin/product/prd123/image/v1/cabas-front.jpg"
+          },
+          "storagePath": {
+            "type": "object",
+            "description": "Chemin disque local (fallback hors MinIO)",
+            "nullable": true
+          },
+          "originalSize": {
+            "type": "number",
+            "description": "Taille originale avant compression (octets)",
+            "example": 120000
+          },
+          "compressedSize": {
+            "type": "number",
+            "description": "Taille stockée après compression éventuelle (octets)",
+            "example": 80000
+          },
+          "compressionAlgo": {
+            "type": "string",
+            "enum": [
+              "NONE",
+              "GZIP"
+            ],
+            "example": "GZIP"
+          },
+          "uploadedById": {
+            "type": "object",
+            "description": "Utilisateur ayant uploadé l’image",
+            "nullable": true,
+            "example": "usr123"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-01T10:00:00.000Z"
+          },
+          "version": {
+            "type": "number",
+            "description": "Version déduite de objectKey / storagePath",
+            "example": 1
+          },
+          "decompressedUrl": {
+            "type": "string",
+            "description": "URL relative de lecture décompressée (présent sur findOne produit)",
+            "example": "/products/prd123/images/img123"
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "originalName",
+          "mimeType",
+          "originalSize",
+          "compressedSize",
+          "compressionAlgo",
+          "createdAt"
+        ]
+      },
+      "ReplaceProductImageResponseDto": {
+        "type": "object",
+        "properties": {
+          "replacedImageId": {
+            "type": "string",
+            "example": "img123"
+          },
+          "newImageId": {
+            "type": "string",
+            "example": "img456"
+          },
+          "version": {
+            "type": "number",
+            "example": 2
+          },
+          "image": {
+            "$ref": "#/components/schemas/ProductImageResponseDto"
+          }
+        },
+        "required": [
+          "replacedImageId",
+          "newImageId",
+          "version",
+          "image"
+        ]
+      },
+      "DeleteProductImageResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "img123"
+          },
+          "deleted": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "id",
+          "deleted"
+        ]
+      },
+      "CreateProductVariantDto": {
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "string",
+            "enum": [
+              "PM",
+              "MM",
+              "GM"
+            ],
+            "example": "GM"
+          },
+          "colorId": {
+            "type": "string",
+            "example": "clx-color-id"
+          },
+          "defaultDimensions": {
+            "type": "string",
+            "example": "50x35x12 cm"
+          },
+          "sku": {
+            "type": "string",
+            "example": "S-123123-GM-NAT"
+          },
+          "stockOnHand": {
+            "type": "number",
+            "example": 0
+          },
+          "priceOverride": {
+            "type": "number",
+            "example": 95
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          },
+          "name": {
+            "type": "string",
+            "example": "Grand modele naturel"
+          }
+        }
+      },
+      "CreateProductDto": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "example": "S/123123",
+            "description": "Reference produit. Si absente, elle est generee automatiquement depuis la categorie."
+          },
+          "name": {
+            "type": "string",
+            "example": "Cabas Madagascar"
+          },
+          "categoryId": {
+            "type": "string",
+            "example": "clx-category-id"
+          },
+          "basePrice": {
+            "type": "number",
+            "example": 89
+          },
+          "stockOnHand": {
+            "type": "number",
+            "example": 28
+          },
+          "status": {
+            "type": "string",
+            "example": "ACTIVE",
+            "enum": [
+              "ACTIVE",
+              "LOW_STOCK",
+              "OUT_OF_STOCK",
+              "ARCHIVED"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "example": "Produit iconique atelier"
+          },
+          "ownership": {
+            "type": "string",
+            "example": "COMPANY",
+            "enum": [
+              "COMPANY",
+              "CLIENT"
+            ],
+            "default": "COMPANY",
+            "description": "COMPANY = produit entreprise (catalogue). CLIENT = modèle privé d'un client (hors catalogue)."
+          },
+          "ownerClientId": {
+            "type": "string",
+            "example": "clx-client-id",
+            "description": "Obligatoire si ownership = CLIENT. Doit être null/omis si COMPANY."
+          },
+          "variants": {
+            "description": "Variantes du produit (taille PM/MM/GM, coloris et dimensions par taille).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateProductVariantDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "categoryId",
+          "basePrice"
+        ]
+      },
+      "UpdateProductDto": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "example": "S/123123",
+            "description": "Reference produit. Si absente, elle est generee automatiquement depuis la categorie."
+          },
+          "name": {
+            "type": "string",
+            "example": "Cabas Madagascar"
+          },
+          "categoryId": {
+            "type": "string",
+            "example": "clx-category-id"
+          },
+          "basePrice": {
+            "type": "number",
+            "example": 89
+          },
+          "stockOnHand": {
+            "type": "number",
+            "example": 28
+          },
+          "status": {
+            "type": "string",
+            "example": "ACTIVE",
+            "enum": [
+              "ACTIVE",
+              "LOW_STOCK",
+              "OUT_OF_STOCK",
+              "ARCHIVED"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "example": "Produit iconique atelier"
+          },
+          "ownership": {
+            "type": "string",
+            "example": "COMPANY",
+            "enum": [
+              "COMPANY",
+              "CLIENT"
+            ],
+            "default": "COMPANY",
+            "description": "COMPANY = produit entreprise (catalogue). CLIENT = modèle privé d'un client (hors catalogue)."
+          },
+          "ownerClientId": {
+            "type": "string",
+            "example": "clx-client-id",
+            "description": "Obligatoire si ownership = CLIENT. Doit être null/omis si COMPANY."
+          },
+          "variants": {
+            "description": "Variantes du produit (taille PM/MM/GM, coloris et dimensions par taille).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateProductVariantDto"
+            }
+          }
+        }
+      }
+    }
+  }
+}
