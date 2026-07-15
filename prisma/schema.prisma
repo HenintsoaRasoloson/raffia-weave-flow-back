@@ -293,6 +293,10 @@ model CompanySetting {
   postalCode          String?
   country             String?
   cgvText             String?
+  /// Devise de référence métier (MVP: toujours MGA).
+  defaultCurrency     String        @default("MGA")
+  /// Nombre d’Ariary pour 1 Euro (ex: 5000 → 1 EUR = 5000 MGA).
+  eurToMgaRate        Decimal       @default(5000) @db.Decimal(14, 4)
   autoSendInvoices    Boolean       @default(true)
   lowStockAlerts      Boolean       @default(true)
   aiDecisionSupport   Boolean       @default(true)
@@ -638,7 +642,7 @@ model SalesOrder {
   totalHt          Decimal           @db.Decimal(12, 2)
   taxRate          Decimal           @default(20.00) @db.Decimal(5, 2)
   totalTtc         Decimal           @db.Decimal(12, 2)
-  currency         String            @default("EUR")
+  currency         String            @default("MGA")
   notes            String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -756,7 +760,7 @@ model PurchaseOrder {
   ledgerEntries LedgerEntry[]
   calendarEvents CalendarEvent[]
   totalHt       Decimal             @db.Decimal(12, 2)
-  currency      String              @default("EUR")
+  currency      String              @default("MGA")
   notes         String?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
@@ -827,7 +831,7 @@ model Invoice {
   subtotalHt    Decimal        @db.Decimal(12, 2)
   taxAmount     Decimal        @db.Decimal(12, 2)
   totalTtc      Decimal        @db.Decimal(12, 2)
-  currency      String         @default("EUR")
+  currency      String         @default("MGA")
   notes         String?
   documents     InvoiceDocument[]
   ledgerEntries LedgerEntry[]
@@ -963,7 +967,7 @@ model FinancialBudget {
   label            String
   direction        BudgetDirection
   amount           Decimal           @db.Decimal(12, 2)
-  currency         String            @default("EUR")
+  currency         String            @default("MGA")
   periodStart      DateTime
   periodEnd        DateTime
   ledgerCategoryId String?
@@ -1031,7 +1035,7 @@ model LedgerEntry {
   label           String
   entryType       LedgerEntryType
   amount          Decimal         @db.Decimal(12, 2)
-  currency        String          @default("EUR")
+  currency        String          @default("MGA")
   ledgerCategoryId String?
   ledgerCategory  LedgerCategory? @relation(fields: [ledgerCategoryId], references: [id])
   clientId        String?

@@ -44,7 +44,7 @@ export const MOCK_INVOICE_DOCUMENT_PREVIEW = {
   issueDate: '15/07/2026',
   dueDate: '14/08/2026',
   orderReference: 'CMD-2026-0142',
-  currency: 'EUR',
+  currency: 'MGA',
   invoiceNotes: 'Livraison prévue semaine 30.',
   lines: [
     {

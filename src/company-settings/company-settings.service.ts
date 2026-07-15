@@ -5,6 +5,11 @@ import {
 } from '@nestjs/common';
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
+import {
+  convertAmount,
+  decimalToNumber,
+  normalizeCurrency,
+} from '../common/currency/currency.util';
 import type { CompanyLogo, CompanyLogoKind } from '../generated/prisma/client';
 import {
   compressBufferIfNeeded,
@@ -20,6 +25,8 @@ import {
   COMPANY_LOGO_KINDS,
   COMPANY_LOGO_MAX_FILE_SIZE_BYTES,
   DEFAULT_COMPANY_NAME,
+  DEFAULT_CURRENCY,
+  DEFAULT_EUR_TO_MGA_RATE,
   type CompanyLogoKindParam,
 } from './company-settings.constants';
 import {
@@ -28,6 +35,10 @@ import {
   CompanySettingsResponseDto,
   DeleteCompanyLogoResponseDto,
 } from './dto/company-logo-response.dto';
+import {
+  ConvertCurrencyQueryDto,
+  ConvertCurrencyResponseDto,
+} from './dto/convert-currency.dto';
 import { UpdateCompanySettingsDto } from './dto/update-company-settings.dto';
 
 const KIND_TO_PRISMA: Record<CompanyLogoKindParam, CompanyLogoKind> = {
@@ -77,6 +88,9 @@ export class CompanySettingsService {
         ...(dto.postalCode !== undefined ? { postalCode: dto.postalCode } : {}),
         ...(dto.country !== undefined ? { country: dto.country } : {}),
         ...(dto.cgvText !== undefined ? { cgvText: dto.cgvText } : {}),
+        ...(dto.eurToMgaRate !== undefined
+          ? { eurToMgaRate: dto.eurToMgaRate }
+          : {}),
         ...(dto.autoSendInvoices !== undefined
           ? { autoSendInvoices: dto.autoSendInvoices }
           : {}),
@@ -92,6 +106,23 @@ export class CompanySettingsService {
     });
 
     return this.toSettingsResponse(updated, updated.logos);
+  }
+
+  async convertCurrency(
+    query: ConvertCurrencyQueryDto,
+  ): Promise<ConvertCurrencyResponseDto> {
+    const settings = await this.ensureSettings();
+    const rate = decimalToNumber(settings.eurToMgaRate);
+    const from = normalizeCurrency(query.from ?? DEFAULT_CURRENCY);
+    const to = normalizeCurrency(query.to ?? 'EUR');
+
+    return {
+      amount: query.amount,
+      from,
+      convertedAmount: convertAmount(query.amount, from, to, rate),
+      to,
+      eurToMgaRate: rate,
+    };
   }
 
   parseLogoKind(raw: string): CompanyLogoKindParam {
@@ -296,6 +327,8 @@ export class CompanySettingsService {
     return this.prisma.companySetting.create({
       data: {
         companyName: DEFAULT_COMPANY_NAME,
+        defaultCurrency: DEFAULT_CURRENCY,
+        eurToMgaRate: DEFAULT_EUR_TO_MGA_RATE,
       },
     });
   }
@@ -352,6 +385,8 @@ export class CompanySettingsService {
       postalCode: string | null;
       country: string | null;
       cgvText: string | null;
+      defaultCurrency: string;
+      eurToMgaRate: unknown;
       autoSendInvoices: boolean;
       lowStockAlerts: boolean;
       aiDecisionSupport: boolean;
@@ -388,6 +423,8 @@ export class CompanySettingsService {
       postalCode: settings.postalCode,
       country: settings.country,
       cgvText: settings.cgvText,
+      defaultCurrency: settings.defaultCurrency,
+      eurToMgaRate: decimalToNumber(settings.eurToMgaRate),
       autoSendInvoices: settings.autoSendInvoices,
       lowStockAlerts: settings.lowStockAlerts,
       aiDecisionSupport: settings.aiDecisionSupport,

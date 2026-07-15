@@ -1,5 +1,11 @@
 export const DEFAULT_COMPANY_NAME = 'Atelier Raphia';
 
+export {
+  DEFAULT_CURRENCY,
+  DEFAULT_EUR_TO_MGA_RATE,
+  SUPPORTED_CURRENCIES,
+} from '../common/currency/currency.constants';
+
 /** Kinds exposés en API (path param / JSON). */
 export const COMPANY_LOGO_KINDS = [
   'primary',

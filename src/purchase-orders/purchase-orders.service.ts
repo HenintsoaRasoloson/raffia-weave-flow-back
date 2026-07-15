@@ -104,7 +104,7 @@ export class PurchaseOrdersService {
           expectedAt: dto.expectedAt ? new Date(dto.expectedAt) : null,
           paidAmount: 0,
           totalHt,
-          currency: dto.currency ?? 'EUR',
+          currency: dto.currency ?? 'MGA',
           notes: dto.notes,
           items: {
             create: dto.items.map((item) => ({
@@ -275,7 +275,7 @@ export class PurchaseOrdersService {
           label: `Paiement fournisseur ${purchaseOrder.orderNumber}`,
           entryType: 'EXPENSE',
           amount: dto.amount,
-          currency: purchaseOrder.currency ?? 'EUR',
+          currency: purchaseOrder.currency ?? 'MGA',
           supplierId: purchaseOrder.supplierId,
           purchaseOrderId: purchaseOrder.id,
           ledgerCategoryId: category.id,

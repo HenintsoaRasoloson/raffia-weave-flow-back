@@ -367,7 +367,7 @@ export class InvoicesService {
           subtotalHt,
           taxAmount,
           totalTtc,
-          currency: dto.currency ?? 'EUR',
+          currency: dto.currency ?? 'MGA',
           notes: dto.notes,
           items: {
             create: items.map((item) => {
@@ -409,7 +409,7 @@ export class InvoicesService {
       this.notificationsService.notifyRole('RESPONSABLE_GENERAL', {
         type: 'proforma_ready',
         title: '📄 Proforma prête à envoyer',
-        message: `${created.invoiceNumber} - ${created.client?.name ?? 'Client'} (${totalTtc.toFixed(2)} ${dto.currency ?? 'EUR'})`,
+        message: `${created.invoiceNumber} - ${created.client?.name ?? 'Client'} (${totalTtc.toFixed(2)} ${dto.currency ?? 'MGA'})`,
         data: {
           invoiceId: created.id,
           invoiceNumber: created.invoiceNumber,
@@ -676,7 +676,7 @@ export class InvoicesService {
           label: `Encaissement facture ${invoice.invoiceNumber}`,
           entryType: 'INCOME',
           amount: dto.amount,
-          currency: invoice.currency ?? 'EUR',
+          currency: invoice.currency ?? 'MGA',
           ledgerCategoryId: category.id,
           clientId: invoice.clientId,
           salesOrderId: invoice.salesOrderId,
@@ -708,7 +708,7 @@ export class InvoicesService {
             paidAmount: { before: alreadyPaid, after: newPaidAmount },
             paymentMethod: { after: dto.paymentMethod },
           },
-          details: `${dto.amount} ${invoice.currency ?? 'EUR'} par ${dto.paymentMethod}`,
+          details: `${dto.amount} ${invoice.currency ?? 'MGA'} par ${dto.paymentMethod}`,
         });
       }
 
@@ -717,7 +717,7 @@ export class InvoicesService {
         await this.notificationsService.notifyRole('GERANT', {
           type: 'large_payment_received',
           title: '💰 Paiement important reçu',
-          message: `${dto.amount.toFixed(2)} EUR - Facture ${updated.invoiceNumber}`,
+          message: `${dto.amount.toFixed(2)} ${updated.currency ?? 'MGA'} - Facture ${updated.invoiceNumber}`,
           data: {
             invoiceId: id,
             amount: dto.amount,
@@ -735,7 +735,7 @@ export class InvoicesService {
         {
           type: 'payment_recorded',
           title: '📝 Paiement enregistré',
-          message: `${dto.amount.toFixed(2)} EUR - ${updated.invoiceNumber}`,
+          message: `${dto.amount.toFixed(2)} ${updated.currency ?? 'MGA'} - ${updated.invoiceNumber}`,
           data: {
             invoiceId: id,
             amount: dto.amount,
@@ -752,7 +752,7 @@ export class InvoicesService {
           {
             type: 'invoice_fully_paid',
             title: '✅ Facture intégralement payée',
-            message: `${updated.invoiceNumber} (${newPaidAmount.toFixed(2)} EUR)`,
+            message: `${updated.invoiceNumber} (${newPaidAmount.toFixed(2)} ${updated.currency ?? 'MGA'})`,
             data: { invoiceId: id, totalAmount: newPaidAmount },
             actionUrl: `/invoices/${id}`,
           },

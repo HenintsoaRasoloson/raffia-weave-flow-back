@@ -20,6 +20,8 @@ describe('CompanySettingsService', () => {
     postalCode: null,
     country: null,
     cgvText: null,
+    defaultCurrency: 'MGA',
+    eurToMgaRate: 5000,
     autoSendInvoices: true,
     lowStockAlerts: true,
     aiDecisionSupport: true,
@@ -83,6 +85,26 @@ describe('CompanySettingsService', () => {
     expect(result.logoSlots.every((s) => s.fallsBackToPrimary === false)).toBe(
       true,
     );
+    expect(result.defaultCurrency).toBe('MGA');
+    expect(result.eurToMgaRate).toBe(5000);
+  });
+
+  it('convertCurrency converts MGA to EUR with company rate', async () => {
+    const prisma = {
+      companySetting: {
+        findFirst: jest.fn().mockResolvedValue(settingsRow),
+      },
+    } as unknown as PrismaService;
+
+    const service = new CompanySettingsService(prisma, minio, gedPaths);
+    const result = await service.convertCurrency({
+      amount: 10000,
+      from: 'MGA',
+      to: 'EUR',
+    });
+
+    expect(result.convertedAmount).toBe(2);
+    expect(result.eurToMgaRate).toBe(5000);
   });
 
   it('falls back to primary for invoice when invoice slot empty', async () => {

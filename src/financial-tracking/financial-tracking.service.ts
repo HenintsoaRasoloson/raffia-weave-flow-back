@@ -177,7 +177,7 @@ export class FinancialTrackingService {
         label: dto.label.trim(),
         direction: dto.direction,
         amount: dto.amount,
-        currency: (dto.currency ?? 'EUR').toUpperCase(),
+        currency: (dto.currency ?? 'MGA').toUpperCase(),
         periodStart,
         periodEnd,
         ledgerCategoryId: dto.ledgerCategoryId,
@@ -216,7 +216,7 @@ export class FinancialTrackingService {
       await this.notificationsService.notifyRole('RESPONSABLE_FINANCIER_STOCKS', {
         type: 'invoice_overdue_reminder',
         title: 'Facture client en retard',
-        message: `${item.invoiceNumber} - ${item.clientName} - ${item.outstandingAmount.toFixed(2)} EUR`,
+        message: `${item.invoiceNumber} - ${item.clientName} - ${item.outstandingAmount.toFixed(2)} MGA`,
         data: {
           invoiceId: item.id,
           clientId: item.clientId,
@@ -233,7 +233,7 @@ export class FinancialTrackingService {
       await this.notificationsService.notifyRole('GERANT', {
         type: 'invoice_overdue_summary',
         title: 'Synthese impayes',
-        message: `${preview.total} facture(s) en retard - ${preview.totalOutstandingAmount.toFixed(2)} EUR`,
+        message: `${preview.total} facture(s) en retard - ${preview.totalOutstandingAmount.toFixed(2)} MGA`,
         data: {
           totalInvoices: preview.total,
           totalOutstandingAmount: preview.totalOutstandingAmount,
@@ -305,7 +305,7 @@ export class FinancialTrackingService {
         {
           type: 'budget_overrun_detected',
           title: 'Depassement budgetaire',
-          message: `${item.label} +${item.variance.toFixed(2)} EUR (${item.varianceRate.toFixed(2)}%)`,
+          message: `${item.label} +${item.variance.toFixed(2)} MGA (${item.varianceRate.toFixed(2)}%)`,
           data: {
             budgetId: item.id,
             variance: item.variance,
@@ -549,7 +549,7 @@ export class FinancialTrackingService {
             {
               code: 'OVERDUE_INVOICES',
               severity: 'high',
-              message: `${overdueInvoices.length} facture(s) en retard pour ${this.round2(overdueAmount)} EUR`,
+              message: `${overdueInvoices.length} facture(s) en retard pour ${this.round2(overdueAmount)} MGA`,
             },
           ]
         : []),
@@ -558,7 +558,7 @@ export class FinancialTrackingService {
             {
               code: 'TREASURY_PRESSURE',
               severity: 'high',
-              message: `Projection de tresorerie negative a ${horizonDays} jours: ${this.round2(projectedBalance)} EUR`,
+              message: `Projection de tresorerie negative a ${horizonDays} jours: ${this.round2(projectedBalance)} MGA`,
             },
           ]
         : []),
@@ -699,7 +699,7 @@ export class FinancialTrackingService {
         label: dto.label.trim(),
         entryType: dto.entryType,
         amount: dto.amount,
-        currency: (dto.currency ?? 'EUR').toUpperCase(),
+        currency: (dto.currency ?? 'MGA').toUpperCase(),
         ledgerCategoryId: dto.ledgerCategoryId,
         clientId: dto.clientId,
         supplierId: dto.supplierId,
@@ -1179,7 +1179,7 @@ export class FinancialTrackingService {
       ? input.dueDate.toLocaleDateString('fr-FR')
       : 'date inconnue';
 
-    return `Relance: facture ${input.invoiceNumber} du client ${input.clientName}, echeance ${dueDateLabel}, retard ${input.daysOverdue} jour(s), reste ${input.outstandingAmount.toFixed(2)} EUR.`;
+    return `Relance: facture ${input.invoiceNumber} du client ${input.clientName}, echeance ${dueDateLabel}, retard ${input.daysOverdue} jour(s), reste ${input.outstandingAmount.toFixed(2)} MGA.`;
   }
 
   private buildBudgetAlertMessage(
@@ -1187,7 +1187,7 @@ export class FinancialTrackingService {
     variance: number,
     varianceRate: number,
   ) {
-    return `Budget ${label} en depassement de ${variance.toFixed(2)} EUR (${varianceRate.toFixed(2)}%).`;
+    return `Budget ${label} en depassement de ${variance.toFixed(2)} MGA (${varianceRate.toFixed(2)}%).`;
   }
 
   private diffDays(later: Date, earlier: Date) {

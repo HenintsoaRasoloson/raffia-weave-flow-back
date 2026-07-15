@@ -121,6 +121,18 @@ export class CompanySettingsResponseDto {
   @ApiPropertyOptional({ nullable: true })
   cgvText?: string | null;
 
+  @ApiProperty({
+    example: 'MGA',
+    description: 'Devise de référence (MVP: MGA)',
+  })
+  defaultCurrency!: string;
+
+  @ApiProperty({
+    example: 5000,
+    description: 'Nombre d’Ariary pour 1 Euro',
+  })
+  eurToMgaRate!: number;
+
   @ApiProperty()
   autoSendInvoices!: boolean;
 

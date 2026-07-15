@@ -31,9 +31,10 @@ export class CreatePurchaseOrderDto {
   @IsIn(['DRAFT', 'CONFIRMED', 'IN_TRANSIT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'])
   status?: 'DRAFT' | 'CONFIRMED' | 'IN_TRANSIT' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'CANCELLED';
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ enum: ['MGA', 'EUR'], example: 'MGA' })
   @IsOptional()
   @IsString()
+  @IsIn(['MGA', 'EUR'])
   currency?: string;
 
   @ApiPropertyOptional()

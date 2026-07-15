@@ -127,9 +127,10 @@ export class CreateSalesOrderDto {
   @Min(0)
   taxRate?: number;
 
-  @ApiPropertyOptional({ example: 'EUR' })
+  @ApiPropertyOptional({ example: 'MGA', enum: ['MGA', 'EUR'] })
   @IsOptional()
   @IsString()
+  @IsIn(['MGA', 'EUR'])
   currency?: string;
 
   @ApiPropertyOptional({ type: [CreateSalesOrderItemDto] })

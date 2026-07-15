@@ -100,9 +100,10 @@ export class CreateInvoiceDto {
   @Type(() => CreateInvoiceItemDto)
   items?: CreateInvoiceItemDto[];
 
-  @ApiPropertyOptional({ example: 'EUR' })
+  @ApiPropertyOptional({ example: 'MGA', enum: ['MGA', 'EUR'] })
   @IsOptional()
   @IsString()
+  @IsIn(['MGA', 'EUR'])
   currency?: string;
 
   @ApiPropertyOptional({ example: 'Facture finale collection hiver' })

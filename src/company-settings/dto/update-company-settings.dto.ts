@@ -1,5 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class UpdateCompanySettingsDto {
   @ApiPropertyOptional({ example: 'Atelier Raphia SAS' })
@@ -54,6 +62,16 @@ export class UpdateCompanySettingsDto {
   @IsOptional()
   @IsString()
   cgvText?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Nombre d’Ariary pour 1 Euro (ex: 5000 → 1 EUR = 5000 MGA)',
+    example: 5000,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.0001)
+  eurToMgaRate?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Res,
   StreamableFile,
   UploadedFile,
@@ -39,6 +40,10 @@ import {
   CompanySettingsResponseDto,
   DeleteCompanyLogoResponseDto,
 } from './dto/company-logo-response.dto';
+import {
+  ConvertCurrencyQueryDto,
+  ConvertCurrencyResponseDto,
+} from './dto/convert-currency.dto';
 import { UpdateCompanySettingsDto } from './dto/update-company-settings.dto';
 
 @ApiTags('Parametres')
@@ -56,6 +61,19 @@ export class CompanySettingsController {
   })
   getSettings() {
     return this.companySettingsService.getSettings();
+  }
+
+  @Get('convert')
+  @ApiOperation({
+    summary:
+      'Convertir un montant MGA ↔ EUR avec le taux societe (1 EUR = eurToMgaRate MGA)',
+  })
+  @ApiOkResponse({
+    description: 'Montant converti',
+    type: ConvertCurrencyResponseDto,
+  })
+  convertCurrency(@Query() query: ConvertCurrencyQueryDto) {
+    return this.companySettingsService.convertCurrency(query);
   }
 
   @Patch()

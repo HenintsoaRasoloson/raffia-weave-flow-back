@@ -72,7 +72,7 @@ Voir aussi `docs/financial-tracking/` pour overview / alertes.
 - Form écriture : type, montant, date, libellé + liaisons optionnelles (client, fournisseur, commande, facture, achat).  
 - Empty categories : forcer à créer une catégorie avant d’exiger un classement (mais `ledgerCategoryId` reste optionnel API).  
 - Budget : datepicker range ; empêcher fin < début côté UI.  
-- Currency : 3 lettres, défaut EUR (affichage ISO).
+- Currency : 3 lettres, défaut MGA (affichage ISO). Conversion EUR via `GET /company-settings/convert` et taux `eurToMgaRate`.
 
 ## 7. Brief API
 

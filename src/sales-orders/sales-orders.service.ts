@@ -326,7 +326,7 @@ export class SalesOrdersService {
           taxRate,
           totalHt,
           totalTtc,
-          currency: dto.currency ?? 'EUR',
+          currency: dto.currency ?? 'MGA',
           notes: dto.notes,
           batRequired: dto.batRequired ?? false,
           items: {
@@ -370,7 +370,7 @@ export class SalesOrdersService {
       {
         type: 'sales_order_created',
         title: 'Nouvelle commande client',
-        message: `Commande ${created.orderNumber} - ${created.client?.name ?? 'Client'} (${Number(created.totalTtc).toFixed(2)} EUR)`,
+        message: `Commande ${created.orderNumber} - ${created.client?.name ?? 'Client'} (${Number(created.totalTtc).toFixed(2)} ${created.currency ?? 'MGA'})`,
         data: {
           orderId: created.id,
           orderNumber: created.orderNumber,

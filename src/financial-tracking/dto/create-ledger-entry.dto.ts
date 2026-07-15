@@ -45,12 +45,13 @@ export class CreateLedgerEntryDto {
 
   @ApiPropertyOptional({
     description: 'Devise',
-    example: 'EUR',
-    default: 'EUR',
+    example: 'MGA',
+    default: 'MGA',
+    enum: ['MGA', 'EUR'],
   })
   @IsOptional()
   @IsString()
-  @Length(3, 3)
+  @IsIn(['MGA', 'EUR'])
   currency?: string;
 
   @ApiPropertyOptional({ description: 'Client rattache a l ecriture' })
