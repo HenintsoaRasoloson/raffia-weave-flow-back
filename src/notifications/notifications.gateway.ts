@@ -1,6 +1,6 @@
 import { OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 
 /**
@@ -19,18 +19,17 @@ import { NotificationsService } from './notifications.service';
 })
 @Injectable()
 export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  private readonly logger = new Logger(NotificationsGateway.name);
+
   @WebSocketServer() server: Server;
 
   constructor(private readonly notificationsService: NotificationsService) {}
 
-  handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
-    // Le client doit s'authentifier et rejoindre sa room de rôle
-    // Voir handleAuthenticate()
+  handleConnection(_client: Socket) {
+    // Handshake brut (souvent un reconnect front) — pas de log ici
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
     this.notificationsService.unregisterClient(client.id);
   }
 
@@ -44,13 +43,15 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     payload: { token: string },
   ) {
     try {
-      const user = this.notificationsService.verifyToken(payload.token);
+      const user = this.notificationsService.verifyToken(payload?.token);
       const roleRoom = `role:${user.role}`;
-      
+
       client.join(roleRoom);
       client.data.userId = user.sub;
       client.data.role = user.role;
       client.data.email = user.email;
+
+      this.notificationsService.registerClient(client.id, user.sub, user.role);
 
       client.emit('authenticated', {
         success: true,
@@ -59,10 +60,12 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
         joinedRoom: roleRoom,
       });
 
-      console.log(`User ${user.email} (${user.role}) authenticated on socket ${client.id}`);
+      this.logger.log(`Authenticated ${user.email} (${user.role}) on ${client.id}`);
     } catch (error) {
-      client.emit('authenticated', { success: false, error: 'Invalid token' });
-      client.disconnect();
+      const reason = error instanceof Error ? error.message : 'Invalid token';
+      // Pas de disconnect : évite une boucle reconnect front + même token invalide
+      this.logger.warn(`WS auth failed for ${client.id}: ${reason}`);
+      client.emit('authenticated', { success: false, error: reason });
     }
   }
 

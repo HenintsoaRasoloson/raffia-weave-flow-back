@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { getAuthConfig } from '../auth/auth.config';
 import { NotificationsGateway } from './notifications.gateway';
 import type { NotificationType } from './notification.types';
 
@@ -26,7 +27,10 @@ export interface NotificationPayload {
  */
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
   private gateway: NotificationsGateway;
+  /** socketId → userId (sessions WS authentifiées) */
+  private readonly connectedClients = new Map<string, { userId: string; role: string }>();
 
   constructor(private readonly jwtService: JwtService) {}
 
@@ -42,7 +46,7 @@ export class NotificationsService {
    */
   async notifyGlobal(payload: NotificationPayload) {
     if (!this.gateway) {
-      console.warn('Gateway not initialized');
+      this.logger.warn('Gateway not initialized');
       return;
     }
     this.gateway.sendGlobalNotification(payload);
@@ -53,7 +57,7 @@ export class NotificationsService {
    */
   async notifyRole(role: string, payload: NotificationPayload) {
     if (!this.gateway) {
-      console.warn('Gateway not initialized');
+      this.logger.warn('Gateway not initialized');
       return;
     }
     this.gateway.sendRoleNotification(role, payload);
@@ -64,7 +68,7 @@ export class NotificationsService {
    */
   async notifyRoles(roles: string[], payload: NotificationPayload) {
     if (!this.gateway) {
-      console.warn('Gateway not initialized');
+      this.logger.warn('Gateway not initialized');
       return;
     }
     this.gateway.sendMultiRoleNotification(roles, payload);
@@ -75,19 +79,25 @@ export class NotificationsService {
    */
   async notifyUser(userId: string, payload: NotificationPayload) {
     if (!this.gateway) {
-      console.warn('Gateway not initialized');
+      this.logger.warn('Gateway not initialized');
       return;
     }
     this.gateway.sendUserNotification(userId, payload);
   }
 
   /**
-   * Vérifier et décoder un JWT token
-   * Utilisé par la gateway lors de l'authentification WS
+   * Vérifier et décoder un access JWT (même secret que AuthService)
    */
   verifyToken(token: string) {
+    if (!token || typeof token !== 'string') {
+      throw new Error('Missing token');
+    }
+
+    const raw = token.startsWith('Bearer ') ? token.slice(7) : token;
+    const { accessTokenSecret } = getAuthConfig();
+
     try {
-      const payload = this.jwtService.verify(token);
+      const payload = this.jwtService.verify(raw, { secret: accessTokenSecret });
       return {
         sub: payload.sub,
         email: payload.email,
@@ -95,22 +105,22 @@ export class NotificationsService {
         role: payload.role,
       };
     } catch (error) {
-      throw new Error('Invalid token');
+      const reason = error instanceof Error ? error.message : 'Invalid token';
+      throw new Error(reason);
     }
   }
 
   /**
-   * Enregistrer/tracer un client (optionnel, pour analytics)
+   * Enregistrer une session WS authentifiée
    */
   registerClient(socketId: string, userId: string, role: string) {
-    // Peut être utilisé pour tracker les utilisateurs connectés
-    console.log(`Registered: ${userId} (${role}) - Socket: ${socketId}`);
+    this.connectedClients.set(socketId, { userId, role });
   }
 
   /**
-   * Désenregistrer un client
+   * Désenregistrer une session WS (disconnect)
    */
   unregisterClient(socketId: string) {
-    console.log(`Unregistered socket: ${socketId}`);
+    this.connectedClients.delete(socketId);
   }
 }
