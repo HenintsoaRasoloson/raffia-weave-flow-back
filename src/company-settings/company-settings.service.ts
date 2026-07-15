@@ -11,10 +11,7 @@ import {
   normalizeCurrency,
 } from '../common/currency/currency.util';
 import type { CompanyLogo, CompanyLogoKind } from '../generated/prisma/client';
-import {
-  compressBufferIfNeeded,
-  decompressBufferIfNeeded,
-} from '../ged/compression.util';
+import { decompressBufferIfNeeded } from '../ged/compression.util';
 import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
 import { GedPathsService } from '../ged/ged-paths.service';
 import { MinioService } from '../ged/minio.service';
@@ -163,10 +160,9 @@ export class CompanySettingsService {
         ? this.extractVersion(existing.objectKey ?? existing.storagePath)
         : 0) + 1;
 
-    const { buffer: storedBuffer, algo } = compressBufferIfNeeded(
-      file.buffer,
-      file.mimetype,
-    );
+    // Logos: pas de gzip — URL signees MinIO utilisables directement en preview navigateur.
+    const storedBuffer = file.buffer;
+    const algo = 'NONE' as const;
 
     const objectKey = this.gedPathsService.buildObjectKey({
       domain: 'admin',
@@ -373,7 +369,7 @@ export class CompanySettingsService {
     };
   }
 
-  private toSettingsResponse(
+  private async toSettingsResponse(
     settings: {
       id: string;
       companyName: string;
@@ -395,10 +391,14 @@ export class CompanySettingsService {
       updatedAt: Date;
     },
     logos: CompanyLogo[],
-  ): CompanySettingsResponseDto {
-    const byKind = new Map(
-      logos.map((logo) => [PRISMA_TO_KIND[logo.kind], this.toLogoResponse(logo)]),
+  ): Promise<CompanySettingsResponseDto> {
+    const responses = await Promise.all(
+      logos.map(async (logo) => {
+        const dto = await this.toLogoResponse(logo);
+        return [PRISMA_TO_KIND[logo.kind], dto] as const;
+      }),
     );
+    const byKind = new Map(responses);
     const primary = byKind.get('primary') ?? null;
 
     const logoSlots: CompanyLogoSlotDto[] = COMPANY_LOGO_KINDS.map((kind) => {
@@ -435,8 +435,11 @@ export class CompanySettingsService {
     };
   }
 
-  private toLogoResponse(logo: CompanyLogo): CompanyLogoResponseDto {
+  private async toLogoResponse(
+    logo: CompanyLogo,
+  ): Promise<CompanyLogoResponseDto> {
     const kind = PRISMA_TO_KIND[logo.kind];
+    const url = `/company-settings/logos/${kind}`;
     return {
       id: logo.id,
       companySettingId: logo.companySettingId,
@@ -453,8 +456,45 @@ export class CompanySettingsService {
       createdAt: logo.createdAt,
       updatedAt: logo.updatedAt,
       version: this.extractVersion(logo.objectKey ?? logo.storagePath),
-      url: `/company-settings/logos/${kind}`,
+      url,
+      previewUrl: await this.buildLogoPreviewUrl(logo, url),
     };
+  }
+
+  /**
+   * Lien utilisable dans un navigateur / <img> sans header JWT.
+   * Prefere une URL MinIO pre-signee ; sinon URL API absolue (JWT requis).
+   */
+  private async buildLogoPreviewUrl(
+    logo: CompanyLogo,
+    relativeUrl: string,
+  ): Promise<string> {
+    if (logo.bucket && logo.objectKey && this.minioService.isEnabled()) {
+      try {
+        // Ne pas forcer ResponseContentType si l'objet est gzippe :
+        // MinIO doit renvoyer Content-Encoding pour que le navigateur decompress.
+        const isGzip = logo.compressionAlgo === 'GZIP';
+        return await this.minioService.getSignedDownloadUrl({
+          bucket: logo.bucket,
+          key: logo.objectKey,
+          expiresInSeconds: 3600,
+          ...(isGzip ? {} : { responseContentType: logo.mimeType }),
+          inline: true,
+        });
+      } catch {
+        // fallback absolu API ci-dessous
+      }
+    }
+
+    return this.toAbsoluteApiUrl(relativeUrl);
+  }
+
+  private toAbsoluteApiUrl(path: string): string {
+    const base = (
+      process.env.PUBLIC_API_URL ??
+      `http://localhost:${process.env.PORT ?? 3000}`
+    ).replace(/\/$/, '');
+    return `${base}${path.startsWith('/') ? path : `/${path}`}`;
   }
 
   private extractVersion(pathLike?: string | null): number {

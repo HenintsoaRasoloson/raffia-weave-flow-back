@@ -57,10 +57,19 @@ export class CompanyLogoResponseDto {
   version?: number;
 
   @ApiProperty({
-    description: 'URL relative de lecture du fichier du slot',
+    description:
+      'URL API relative de lecture (JWT requis). Preferez previewUrl pour <img>.',
     example: '/company-settings/logos/primary',
   })
   url!: string;
+
+  @ApiProperty({
+    description:
+      'Lien ouvrir / coller dans <img src> : URL MinIO signee (si GED actif), sinon URL API absolue.',
+    example:
+      'http://localhost:9000/ged-raw/admin/company-setting/cst123/logo_primary/...?X-Amz-Signature=...',
+  })
+  previewUrl!: string;
 }
 
 export class CompanyLogoSlotDto {

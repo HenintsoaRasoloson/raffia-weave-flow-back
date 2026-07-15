@@ -93,11 +93,19 @@ export class MinioService {
     bucket: string;
     key: string;
     expiresInSeconds?: number;
+    responseContentType?: string;
+    inline?: boolean;
   }) {
     const client = this.getClientOrThrow();
     const command = new GetObjectCommand({
       Bucket: params.bucket,
       Key: params.key,
+      ...(params.responseContentType
+        ? { ResponseContentType: params.responseContentType }
+        : {}),
+      ...(params.inline !== false
+        ? { ResponseContentDisposition: 'inline' }
+        : {}),
     });
 
     return getSignedUrl(client, command, {

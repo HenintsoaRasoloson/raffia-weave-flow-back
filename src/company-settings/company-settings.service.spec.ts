@@ -35,6 +35,9 @@ describe('CompanySettingsService', () => {
     putObject: jest.fn(),
     getObjectAsBuffer: jest.fn(),
     removeObject: jest.fn(),
+    getSignedDownloadUrl: jest.fn().mockResolvedValue(
+      'http://localhost:9000/signed-preview',
+    ),
   } as unknown as MinioService;
 
   const gedPaths = {
@@ -140,7 +143,63 @@ describe('CompanySettingsService', () => {
 
     expect(invoiceSlot?.logo).toBeNull();
     expect(invoiceSlot?.resolved?.id).toBe('clg1');
+    expect(invoiceSlot?.resolved?.url).toBe('/company-settings/logos/primary');
+    expect(invoiceSlot?.resolved?.previewUrl).toMatch(
+      /^http:\/\/localhost:3000\/company-settings\/logos\/primary$/,
+    );
     expect(invoiceSlot?.fallsBackToPrimary).toBe(true);
+  });
+
+  it('emits MinIO signed previewUrl when object storage is enabled', async () => {
+    const primaryLogo = {
+      id: 'clg1',
+      companySettingId: 'cst1',
+      kind: 'PRIMARY',
+      originalName: 'main.png',
+      mimeType: 'image/png',
+      bucket: 'ged-raw',
+      objectKey: 'admin/company-setting/cst1/logo_primary/v1/file.png',
+      storagePath: null,
+      originalSize: 10,
+      compressedSize: 8,
+      compressionAlgo: 'GZIP',
+      uploadedById: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const minioEnabled = {
+      isEnabled: () => true,
+      putObject: jest.fn(),
+      getObjectAsBuffer: jest.fn(),
+      removeObject: jest.fn(),
+      getSignedDownloadUrl: jest
+        .fn()
+        .mockResolvedValue('http://localhost:9000/ged-raw/preview?sig=abc'),
+    } as unknown as MinioService;
+
+    const prisma = {
+      companySetting: {
+        findFirst: jest.fn().mockResolvedValue(settingsRow),
+      },
+      companyLogo: {
+        findMany: jest.fn().mockResolvedValue([primaryLogo]),
+      },
+    } as unknown as PrismaService;
+
+    const service = new CompanySettingsService(prisma, minioEnabled, gedPaths);
+    const result = await service.getSettings();
+    const primarySlot = result.logoSlots.find((s) => s.kind === 'primary');
+
+    expect(primarySlot?.logo?.previewUrl).toBe(
+      'http://localhost:9000/ged-raw/preview?sig=abc',
+    );
+    expect(minioEnabled.getSignedDownloadUrl).toHaveBeenCalledWith({
+      bucket: 'ged-raw',
+      key: 'admin/company-setting/cst1/logo_primary/v1/file.png',
+      expiresInSeconds: 3600,
+      inline: true,
+    });
   });
 
   it('deleteLogo throws when slot empty', async () => {

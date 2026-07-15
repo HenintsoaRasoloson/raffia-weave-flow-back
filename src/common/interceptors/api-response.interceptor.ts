@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
+  StreamableFile,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { Observable } from 'rxjs';
@@ -31,6 +32,11 @@ export class ApiResponseInterceptor<T>
 
     return next.handle().pipe(
       map((data) => {
+        // Binary downloads must stay raw (Content-Type image/*, PDF, etc.).
+        if (data instanceof StreamableFile) {
+          return data;
+        }
+
         if (this.isAlreadyWrapped(data)) {
           return data;
         }

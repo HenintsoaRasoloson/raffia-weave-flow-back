@@ -129,6 +129,10 @@ export class CompanySettingsController {
   @ApiOperation({
     summary: 'Lire le fichier du slot logo exact (sans fallback)',
   })
+  @ApiOkResponse({
+    description: 'Image logo (binaire, Content-Type = mimeType du fichier)',
+    schema: { type: 'string', format: 'binary' },
+  })
   async getLogo(
     @Param('kind') kind: string,
     @Res({ passthrough: true }) res: Response,
@@ -139,6 +143,7 @@ export class CompanySettingsController {
       'Content-Disposition',
       `inline; filename="${logo.originalName}"`,
     );
+    res.setHeader('Cache-Control', 'private, max-age=60');
     return new StreamableFile(logo.buffer);
   }
 
@@ -146,6 +151,10 @@ export class CompanySettingsController {
   @ApiOperation({
     summary:
       'Lire le logo effectif pour un canal (override, sinon primary). 404 si aucun.',
+  })
+  @ApiOkResponse({
+    description: 'Image logo resolue (binaire)',
+    schema: { type: 'string', format: 'binary' },
   })
   async getResolvedLogo(
     @Param('kind') kind: string,
@@ -162,6 +171,7 @@ export class CompanySettingsController {
       'Content-Disposition',
       `inline; filename="${logo.originalName}"`,
     );
+    res.setHeader('Cache-Control', 'private, max-age=60');
     return new StreamableFile(logo.buffer);
   }
 
