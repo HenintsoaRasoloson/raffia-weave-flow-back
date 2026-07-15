@@ -36,7 +36,11 @@ export class InvoiceDocumentHeaderDto {
   @IsBoolean()
   showVatNumber!: boolean;
 
-  @ApiPropertyOptional({ nullable: true, example: null })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: null,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(INVOICE_DOCUMENT_FREE_TEXT_MAX_LENGTH)
@@ -53,7 +57,11 @@ export class InvoiceDocumentClientBlockDto {
   @IsBoolean()
   showContactName!: boolean;
 
-  @ApiPropertyOptional({ nullable: true, example: 'Facturé à' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: 'Facturé à',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(INVOICE_DOCUMENT_FREE_TEXT_MAX_LENGTH)
@@ -140,14 +148,22 @@ export class InvoiceDocumentNotesDto {
   @IsBoolean()
   showInvoiceNotes!: boolean;
 
-  @ApiPropertyOptional({ nullable: true, example: null })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: null,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(INVOICE_DOCUMENT_FREE_TEXT_MAX_LENGTH)
   @IsPlainText()
   introText?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, example: null })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: null,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(INVOICE_DOCUMENT_FREE_TEXT_MAX_LENGTH)
@@ -164,7 +180,11 @@ export class InvoiceDocumentLegalDto {
   @IsBoolean()
   showIban!: boolean;
 
-  @ApiPropertyOptional({ nullable: true, example: null })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: null,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(INVOICE_DOCUMENT_FREE_TEXT_MAX_LENGTH)
@@ -174,6 +194,7 @@ export class InvoiceDocumentLegalDto {
 
 export class InvoiceDocumentFooterDto {
   @ApiPropertyOptional({
+    type: String,
     nullable: true,
     example: 'Merci pour votre confiance — {{companyName}}',
   })
@@ -186,6 +207,8 @@ export class InvoiceDocumentFooterDto {
 
 export class InvoiceDocumentContentDto {
   @ApiProperty({
+    type: Number,
+    enum: [INVOICE_DOCUMENT_CONTENT_VERSION],
     example: INVOICE_DOCUMENT_CONTENT_VERSION,
     description: 'Doit être strictement 1 (v1)',
   })
