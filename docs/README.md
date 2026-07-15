@@ -4,6 +4,13 @@ Toute la documentation projet est centralisee dans ce dossier.
 
 ## Structure
 
+- flows/ — **parcours de création Front/Back** (source de vérité intégration UI)
+  - README.md — index + conventions
+  - chaine-metier.md — enchaînement bout-en-bout
+  - referentiels.md, produits.md, clients.md, fournisseurs.md, composants-bom.md
+  - commandes-vente.md, ordres-production.md, commandes-achat.md
+  - factures.md, livraisons.md, partage-catalogue.md
+  - suivi-financier.md, utilisateurs.md
 - architecture/
   - DASHBOARD_IMPLEMENTATION.md
   - GED_MINIO_STRUCTURE.md
@@ -31,3 +38,4 @@ Toute la documentation projet est centralisee dans ce dossier.
 - Garder la doc technique et les guides fonctionnels dans docs/
 - Eviter de laisser des fichiers .md fonctionnels a la racine, sauf README.md
 - Quand une fonctionnalite est ajoutee, documenter dans le sous-dossier correspondant
+- Les flows de creation UI sont dans docs/flows/ (format PO + brief API pour alignement front)
