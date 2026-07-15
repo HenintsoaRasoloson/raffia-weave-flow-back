@@ -222,6 +222,8 @@ export class InvoiceDocumentTemplatesService {
     invoiceType: InvoiceType | null,
   ): Promise<InvoiceDocumentPreviewData> {
     const company = await this.companySettingsService.getSettings();
+    const logoDataUri =
+      await this.companySettingsService.resolveLogoDataUri('invoice');
     const addressParts = [
       company.addressLine,
       [company.postalCode, company.city].filter(Boolean).join(' '),
@@ -239,6 +241,7 @@ export class InvoiceDocumentTemplatesService {
       vatNumber: company.vatNumber || MOCK_INVOICE_DOCUMENT_PREVIEW.vatNumber,
       iban: company.iban || MOCK_INVOICE_DOCUMENT_PREVIEW.iban,
       cgvText: company.cgvText || MOCK_INVOICE_DOCUMENT_PREVIEW.cgvText,
+      logoDataUri,
       clientName: MOCK_INVOICE_DOCUMENT_PREVIEW.clientName,
       clientAddress: MOCK_INVOICE_DOCUMENT_PREVIEW.clientAddress,
       contactName: MOCK_INVOICE_DOCUMENT_PREVIEW.contactName,
@@ -275,6 +278,8 @@ export class InvoiceDocumentTemplatesService {
     }
 
     const company = await this.companySettingsService.getSettings();
+    const logoDataUri =
+      await this.companySettingsService.resolveLogoDataUri('invoice');
     const client = invoice.client;
     const companyAddress = [
       company.addressLine,
@@ -298,6 +303,7 @@ export class InvoiceDocumentTemplatesService {
       vatNumber: company.vatNumber ?? '',
       iban: company.iban ?? '',
       cgvText: company.cgvText ?? '',
+      logoDataUri,
       clientName: client.name,
       clientAddress,
       contactName: client.contactName ?? '',

@@ -79,6 +79,7 @@ describe('InvoiceDocumentTemplatesService', () => {
       iban: 'FR76',
       cgvText: 'CGV test',
     }),
+    resolveLogoDataUri: jest.fn().mockResolvedValue(null),
   } as unknown as CompanySettingsService;
 
   it('returns empty list without error', async () => {

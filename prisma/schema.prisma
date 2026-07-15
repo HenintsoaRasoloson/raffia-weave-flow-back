@@ -169,6 +169,14 @@ enum CompressionAlgo {
   GZIP
 }
 
+/// Slots d'identité visuelle société (fallback: PRIMARY si override absent).
+enum CompanyLogoKind {
+  PRIMARY
+  APP
+  INVOICE
+  EMAIL
+}
+
 enum ProductTechnicalElementCategory {
   CROCHET
   RAPHIA
@@ -251,6 +259,7 @@ model User {
   uploadedBatDocuments BatDocument[]
   uploadedClientFiscalCards ClientFiscalCard[]
   uploadedInvoiceDocuments InvoiceDocument[]
+  uploadedCompanyLogos CompanyLogo[]
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }
@@ -274,7 +283,7 @@ model AuditLog {
 }
 
 model CompanySetting {
-  id                  String   @id @default(cuid())
+  id                  String        @id @default(cuid())
   companyName         String
   siret               String?
   vatNumber           String?
@@ -284,12 +293,36 @@ model CompanySetting {
   postalCode          String?
   country             String?
   cgvText             String?
-  autoSendInvoices    Boolean  @default(true)
-  lowStockAlerts      Boolean  @default(true)
-  aiDecisionSupport   Boolean  @default(true)
-  darkMode            Boolean  @default(false)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  autoSendInvoices    Boolean       @default(true)
+  lowStockAlerts      Boolean       @default(true)
+  aiDecisionSupport   Boolean       @default(true)
+  darkMode            Boolean       @default(false)
+  logos               CompanyLogo[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+/// Logos société (GED): un fichier actif par kind, domaine admin/company-setting.
+model CompanyLogo {
+  id               String           @id @default(cuid())
+  companySettingId String
+  companySetting   CompanySetting   @relation(fields: [companySettingId], references: [id], onDelete: Cascade)
+  kind             CompanyLogoKind
+  originalName     String
+  mimeType         String
+  bucket           String?
+  objectKey        String?
+  storagePath      String?
+  originalSize     Int
+  compressedSize   Int
+  compressionAlgo  CompressionAlgo  @default(GZIP)
+  uploadedById     String?
+  uploadedBy       User?            @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([companySettingId, kind])
+  @@index([companySettingId])
 }
 
 model DocumentSequence {

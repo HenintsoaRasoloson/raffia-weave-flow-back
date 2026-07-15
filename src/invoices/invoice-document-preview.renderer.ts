@@ -22,6 +22,8 @@ export type InvoiceDocumentPreviewData = {
   vatNumber: string;
   iban: string;
   cgvText: string;
+  /** Data-URI du logo facture résolu (override invoice → primary), sinon null. */
+  logoDataUri: string | null;
   clientName: string;
   clientAddress: string;
   contactName: string;
@@ -86,9 +88,15 @@ export function buildInvoiceDocumentPreviewHtml(
   const headerBits: string[] = [];
 
   if (content.header.showLogo) {
-    headerBits.push(
-      `<div style="width:56px;height:56px;border:1px dashed #94a3b8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:11px;">${escapeHtml(labels.logoPlaceholder)}</div>`,
-    );
+    if (data.logoDataUri) {
+      headerBits.push(
+        `<img src="${escapeHtml(data.logoDataUri)}" alt="${escapeHtml(labels.logoPlaceholder)}" style="max-width:120px;max-height:56px;object-fit:contain;" />`,
+      );
+    } else {
+      headerBits.push(
+        `<div style="width:56px;height:56px;border:1px dashed #94a3b8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:11px;">${escapeHtml(labels.logoPlaceholder)}</div>`,
+      );
+    }
   }
 
   const companyBits: string[] = [];

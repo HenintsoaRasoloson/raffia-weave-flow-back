@@ -28,21 +28,40 @@ docker compose -f docker-compose.minio.yml up -d
 Convention de cle S3:
 
 ```text
-{domain}/{entityType}/{entityId}/{documentType}/{yyyy}/{mm}/{dd}/v{version}/{uuid}-{filename}
+{domain}/{entityType}/{entityId}/{documentType}/{yyyy}/{mm}/{dd}/v{version}/{readable-name}-{stamp}-{suffix}.{ext}
 ```
 
 Exemple facture signee:
 
 ```text
-finance/invoice/inv_01j123/signed_invoice/2026/07/09/v1/550e8400-e29b-41d4-a716-446655440000-facture-fac-2026-0421-signee.pdf
+finance/invoice/inv_01j123/signed_invoice/2026/07/09/v1/invoice-inv_01j123-signed_invoice-facture-signee-20260709-101500-a1b2c3.pdf
 ```
 
 Exemple BAT signe:
 
 ```text
-sales/sales-order/so_01j777/bat_signed/2026/07/09/v1/0f9a3ad3-7e2a-4f50-8edf-17bcfcd11abc-bat-client.pdf
+sales/sales-order/so_01j777/bat_signed/2026/07/09/v1/sales-order-so_01j777-bat_signed-bat-client-20260709-101500-0f9a3a.pdf
 ```
 
+Exemple logos societe (Company Settings):
+
+```text
+admin/company-setting/cst_01abc/logo_primary/2026/07/15/v1/company-setting-cst_01abc-logo_primary-logo-atelier-20260715-120000-d4e5f6.png
+admin/company-setting/cst_01abc/logo_invoice/2026/07/15/v2/company-setting-cst_01abc-logo_invoice-logo-facture-20260715-130000-aabbcc.png
+admin/company-setting/cst_01abc/logo_email/2026/07/15/v1/company-setting-cst_01abc-logo_email-logo-mail-20260715-140000-112233.png
+admin/company-setting/cst_01abc/logo_app/2026/07/15/v1/company-setting-cst_01abc-logo_app-logo-app-20260715-150000-445566.webp
+```
+
+Document types logos:
+
+| Kind API | `documentType` GED | Usage |
+|----------|--------------------|--------|
+| `primary` | `logo_primary` | Fallback pour tous les canaux |
+| `app` | `logo_app` | Application (sidebar / login) |
+| `invoice` | `logo_invoice` | Documents (factures, devis, BL…) |
+| `email` | `logo_email` | Templates email |
+
+Resolution runtime: override du slot → sinon `primary` → sinon aucun logo.
 ## Domaines conseilles
 
 - `sales`
@@ -66,7 +85,7 @@ sales/sales-order/so_01j777/bat_signed/2026/07/09/v1/0f9a3ad3-7e2a-4f50-8edf-17b
 - Factures: documents signes/cachetes
 - BAT: documents BAT (preview, envoye client, signe approuve)
 - Clients B2B: cartes fiscales avec date de validite
-
+- Societe: logos d'identite visuelle (`CompanyLogo`, 1 fichier actif par kind, versions GED)
 ## Compression images
 
 - Les images uploadées sont compressees en `gzip` avant stockage objet
