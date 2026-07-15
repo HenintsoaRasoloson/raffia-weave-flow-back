@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { getAuthConfig } from '../auth/auth.config';
-import { NotificationsGateway } from './notifications.gateway';
+import type { NotificationsGateway } from './notifications.gateway';
 import type { NotificationType } from './notification.types';
 
 export interface NotificationPayload {
@@ -94,10 +93,15 @@ export class NotificationsService {
     }
 
     const raw = token.startsWith('Bearer ') ? token.slice(7) : token;
-    const { accessTokenSecret } = getAuthConfig();
 
     try {
-      const payload = this.jwtService.verify(raw, { secret: accessTokenSecret });
+      // Uses the access secret registered on JwtModule in NotificationsModule
+      const payload = this.jwtService.verify<{
+        sub: string;
+        email: string;
+        name: string;
+        role: string;
+      }>(raw);
       return {
         sub: payload.sub,
         email: payload.email,
