@@ -11,6 +11,8 @@ import { SearchController } from '../search/search.controller';
 import { SearchService } from '../search/search.service';
 import { ReferenceLookupController } from '../reference-lookup/reference-lookup.controller';
 import { ReferenceLookupService } from '../reference-lookup/reference-lookup.service';
+import { InvoiceDocumentTemplatesController } from '../invoices/invoice-document-templates.controller';
+import { InvoiceDocumentTemplatesService } from '../invoices/invoice-document-templates.service';
 import { InvoicesController } from '../invoices/invoices.controller';
 import { InvoicesService } from '../invoices/invoices.service';
 import { ProductsController } from '../products/products.controller';
@@ -28,6 +30,7 @@ describe('OpenAPI response schemas (contractualisation)', () => {
         ReferenceLookupController,
         AuditController,
         InvoicesController,
+        InvoiceDocumentTemplatesController,
         ProductsController,
       ],
       providers: [
@@ -63,6 +66,18 @@ describe('OpenAPI response schemas (contractualisation)', () => {
             getDocumentBinary: jest.fn(),
             markPaid: jest.fn(),
             downloadPdf: jest.fn(),
+          },
+        },
+        {
+          provide: InvoiceDocumentTemplatesService,
+          useValue: {
+            list: jest.fn(),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            remove: jest.fn(),
+            setDefault: jest.fn(),
+            preview: jest.fn(),
           },
         },
         {
@@ -160,6 +175,26 @@ describe('OpenAPI response schemas (contractualisation)', () => {
     expect(JSON.stringify(list)).toContain('InvoiceTemplateResponseDto');
   });
 
+  it('publie InvoiceDocumentTemplateResponseDto pour /invoices/document-templates', () => {
+    const document = buildDocument();
+    expect(Object.keys(document.components?.schemas ?? {})).toEqual(
+      expect.arrayContaining([
+        'InvoiceDocumentTemplateResponseDto',
+        'InvoiceDocumentContentDto',
+        'InvoiceDocumentTemplatePreviewResponseDto',
+      ]),
+    );
+    const list =
+      document.paths['/invoices/document-templates']?.get?.responses?.['200'];
+    expect(JSON.stringify(list)).toContain('InvoiceDocumentTemplateResponseDto');
+    const preview =
+      document.paths['/invoices/document-templates/{id}/preview']?.post
+        ?.responses?.['200'];
+    expect(JSON.stringify(preview)).toContain(
+      'InvoiceDocumentTemplatePreviewResponseDto',
+    );
+  });
+
   it('publie ProductImageResponseDto pour /products/{id}/images', () => {
     const document = buildDocument();
     expect(Object.keys(document.components?.schemas ?? {})).toEqual(
@@ -185,6 +220,7 @@ describe('OpenAPI response schemas (contractualisation)', () => {
         'ReferenceLookupResponseDto',
         'AuditLogResponseDto',
         'InvoiceTemplateResponseDto',
+        'InvoiceDocumentTemplateResponseDto',
         'ProductImageResponseDto',
       ]),
     );

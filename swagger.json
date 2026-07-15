@@ -1221,6 +1221,260 @@
         ]
       }
     },
+    "/invoices/document-templates": {
+      "get": {
+        "operationId": "InvoiceDocumentTemplatesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Liste des templates (tableau vide si aucun)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InvoiceDocumentTemplateResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lister les templates document de facture",
+        "tags": [
+          "Factures — Templates document"
+        ]
+      },
+      "post": {
+        "operationId": "InvoiceDocumentTemplatesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvoiceDocumentTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Template créé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDocumentTemplateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Créer un template document de facture",
+        "tags": [
+          "Factures — Templates document"
+        ]
+      }
+    },
+    "/invoices/document-templates/{id}": {
+      "get": {
+        "operationId": "InvoiceDocumentTemplatesController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template trouvé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDocumentTemplateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Récupérer un template document de facture",
+        "tags": [
+          "Factures — Templates document"
+        ]
+      },
+      "patch": {
+        "operationId": "InvoiceDocumentTemplatesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInvoiceDocumentTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template mis à jour",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDocumentTemplateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mettre à jour un template document de facture",
+        "tags": [
+          "Factures — Templates document"
+        ]
+      },
+      "delete": {
+        "operationId": "InvoiceDocumentTemplatesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Template supprimé"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Supprimer un template document de facture",
+        "tags": [
+          "Factures — Templates document"
+        ]
+      }
+    },
+    "/invoices/document-templates/{id}/set-default": {
+      "post": {
+        "operationId": "InvoiceDocumentTemplatesController_setDefault",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template défini comme défaut",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDocumentTemplateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Définir le template comme défaut pour son scope (type ou global)",
+        "tags": [
+          "Factures — Templates document"
+        ]
+      }
+    },
+    "/invoices/document-templates/{id}/preview": {
+      "post": {
+        "operationId": "InvoiceDocumentTemplatesController_preview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewInvoiceDocumentTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aperçu HTML",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDocumentTemplatePreviewResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Prévisualiser le template en HTML (mock ou facture réelle)",
+        "tags": [
+          "Factures — Templates document"
+        ]
+      }
+    },
     "/products": {
       "get": {
         "description": "Par defaut, la liste est allegee (sans variantes). Ajoutez includeVariants=true pour inclure les variantes. Ajoutez fields=compact pour un payload minimum (id, ref, nom, statut, prix).",
@@ -2921,6 +3175,416 @@
         "required": [
           "amount",
           "paymentMethod"
+        ]
+      },
+      "InvoiceDocumentHeaderDto": {
+        "type": "object",
+        "properties": {
+          "showLogo": {
+            "type": "boolean",
+            "example": true
+          },
+          "showCompanyName": {
+            "type": "boolean",
+            "example": true
+          },
+          "showCompanyAddress": {
+            "type": "boolean",
+            "example": true
+          },
+          "showSiret": {
+            "type": "boolean",
+            "example": true
+          },
+          "showVatNumber": {
+            "type": "boolean",
+            "example": true
+          },
+          "titleOverride": {
+            "type": "object",
+            "nullable": true,
+            "example": null
+          }
+        },
+        "required": [
+          "showLogo",
+          "showCompanyName",
+          "showCompanyAddress",
+          "showSiret",
+          "showVatNumber"
+        ]
+      },
+      "InvoiceDocumentClientBlockDto": {
+        "type": "object",
+        "properties": {
+          "showAddress": {
+            "type": "boolean",
+            "example": true
+          },
+          "showContactName": {
+            "type": "boolean",
+            "example": true
+          },
+          "label": {
+            "type": "object",
+            "nullable": true,
+            "example": "Facturé à"
+          }
+        },
+        "required": [
+          "showAddress",
+          "showContactName"
+        ]
+      },
+      "InvoiceDocumentMetaDto": {
+        "type": "object",
+        "properties": {
+          "showInvoiceNumber": {
+            "type": "boolean",
+            "example": true
+          },
+          "showIssueDate": {
+            "type": "boolean",
+            "example": true
+          },
+          "showDueDate": {
+            "type": "boolean",
+            "example": true
+          },
+          "showOrderReference": {
+            "type": "boolean",
+            "example": true
+          },
+          "showCurrency": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "showInvoiceNumber",
+          "showIssueDate",
+          "showDueDate",
+          "showOrderReference",
+          "showCurrency"
+        ]
+      },
+      "InvoiceDocumentLineColumnsDto": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "boolean",
+            "example": true,
+            "description": "Toujours true en v1 — sinon validation 400"
+          },
+          "quantity": {
+            "type": "boolean",
+            "example": true
+          },
+          "unitPriceHt": {
+            "type": "boolean",
+            "example": true
+          },
+          "taxRate": {
+            "type": "boolean",
+            "example": true
+          },
+          "lineTotalHt": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "description",
+          "quantity",
+          "unitPriceHt",
+          "taxRate",
+          "lineTotalHt"
+        ]
+      },
+      "InvoiceDocumentLinesDto": {
+        "type": "object",
+        "properties": {
+          "columns": {
+            "$ref": "#/components/schemas/InvoiceDocumentLineColumnsDto"
+          }
+        },
+        "required": [
+          "columns"
+        ]
+      },
+      "InvoiceDocumentTotalsDto": {
+        "type": "object",
+        "properties": {
+          "showSubtotalHt": {
+            "type": "boolean",
+            "example": true
+          },
+          "showTaxAmount": {
+            "type": "boolean",
+            "example": true
+          },
+          "showTotalTtc": {
+            "type": "boolean",
+            "example": true
+          },
+          "showPaidAmount": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": [
+          "showSubtotalHt",
+          "showTaxAmount",
+          "showTotalTtc",
+          "showPaidAmount"
+        ]
+      },
+      "InvoiceDocumentNotesDto": {
+        "type": "object",
+        "properties": {
+          "showInvoiceNotes": {
+            "type": "boolean",
+            "example": true
+          },
+          "introText": {
+            "type": "object",
+            "nullable": true,
+            "example": null
+          },
+          "closingText": {
+            "type": "object",
+            "nullable": true,
+            "example": null
+          }
+        },
+        "required": [
+          "showInvoiceNotes"
+        ]
+      },
+      "InvoiceDocumentLegalDto": {
+        "type": "object",
+        "properties": {
+          "showCgv": {
+            "type": "boolean",
+            "example": true
+          },
+          "showIban": {
+            "type": "boolean",
+            "example": true
+          },
+          "customMentions": {
+            "type": "object",
+            "nullable": true,
+            "example": null
+          }
+        },
+        "required": [
+          "showCgv",
+          "showIban"
+        ]
+      },
+      "InvoiceDocumentFooterDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "object",
+            "nullable": true,
+            "example": "Merci pour votre confiance — {{companyName}}"
+          }
+        }
+      },
+      "InvoiceDocumentContentDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "object",
+            "example": 1,
+            "description": "Doit être strictement 1 (v1)"
+          },
+          "header": {
+            "$ref": "#/components/schemas/InvoiceDocumentHeaderDto"
+          },
+          "clientBlock": {
+            "$ref": "#/components/schemas/InvoiceDocumentClientBlockDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/InvoiceDocumentMetaDto"
+          },
+          "lines": {
+            "$ref": "#/components/schemas/InvoiceDocumentLinesDto"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/InvoiceDocumentTotalsDto"
+          },
+          "notes": {
+            "$ref": "#/components/schemas/InvoiceDocumentNotesDto"
+          },
+          "legal": {
+            "$ref": "#/components/schemas/InvoiceDocumentLegalDto"
+          },
+          "footer": {
+            "$ref": "#/components/schemas/InvoiceDocumentFooterDto"
+          }
+        },
+        "required": [
+          "version",
+          "header",
+          "clientBlock",
+          "meta",
+          "lines",
+          "totals",
+          "notes",
+          "legal",
+          "footer"
+        ]
+      },
+      "InvoiceDocumentTemplateResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "clxdocTpl01"
+          },
+          "name": {
+            "type": "string",
+            "example": "Facture A4 classique"
+          },
+          "invoiceType": {
+            "type": "string",
+            "enum": [
+              "PROFORMA",
+              "DEPOSIT",
+              "INTERMEDIATE",
+              "FINAL",
+              "CREDIT_NOTE"
+            ],
+            "nullable": true,
+            "example": "FINAL"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "example": true
+          },
+          "locale": {
+            "type": "string",
+            "example": "fr",
+            "enum": [
+              "fr"
+            ]
+          },
+          "content": {
+            "$ref": "#/components/schemas/InvoiceDocumentContentDto"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-15T10:00:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-15T10:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "isDefault",
+          "locale",
+          "content",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateInvoiceDocumentTemplateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Facture A4 classique",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "invoiceType": {
+            "type": "string",
+            "enum": [
+              "PROFORMA",
+              "DEPOSIT",
+              "INTERMEDIATE",
+              "FINAL",
+              "CREDIT_NOTE"
+            ],
+            "nullable": true,
+            "description": "null = applicable à tous les types de facture",
+            "example": "FINAL"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "example": false,
+            "default": false
+          },
+          "content": {
+            "$ref": "#/components/schemas/InvoiceDocumentContentDto"
+          }
+        },
+        "required": [
+          "name",
+          "content"
+        ]
+      },
+      "UpdateInvoiceDocumentTemplateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Facture A4 classique",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "invoiceType": {
+            "type": "string",
+            "enum": [
+              "PROFORMA",
+              "DEPOSIT",
+              "INTERMEDIATE",
+              "FINAL",
+              "CREDIT_NOTE"
+            ],
+            "nullable": true,
+            "description": "null = applicable à tous les types de facture",
+            "example": "FINAL"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "example": false,
+            "default": false
+          },
+          "content": {
+            "$ref": "#/components/schemas/InvoiceDocumentContentDto"
+          }
+        }
+      },
+      "PreviewInvoiceDocumentTemplateDto": {
+        "type": "object",
+        "properties": {
+          "invoiceId": {
+            "type": "string",
+            "description": "Si omis: dataset mock + CompanySettings. Si fourni: facture réelle.",
+            "example": "clxinvoice01"
+          }
+        }
+      },
+      "InvoiceDocumentTemplatePreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "html": {
+            "type": "string",
+            "example": "<!DOCTYPE html><html lang=\"fr\">...</html>",
+            "description": "Document HTML A4 prêt à prévisualiser (MVP, pas de PDF)"
+          }
+        },
+        "required": [
+          "html"
         ]
       },
       "ProductResponseDto": {

@@ -36,6 +36,11 @@ export class ApiResponseInterceptor<T>
         }
 
         const statusCode = response.statusCode;
+
+        if (statusCode === 204) {
+          return undefined as unknown as T;
+        }
+
         return {
           success: true,
           statusCode,

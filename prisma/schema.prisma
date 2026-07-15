@@ -818,6 +818,21 @@ model InvoiceTemplate {
   updatedAt DateTime    @updatedAt
 }
 
+/// Mise en page document facture (distinct des templates e-mail InvoiceTemplate).
+/// invoiceType null = applicable à tous les types.
+model InvoiceDocumentTemplate {
+  id          String       @id @default(cuid())
+  name        String
+  invoiceType InvoiceType?
+  isDefault   Boolean      @default(false)
+  locale      String       @default("fr")
+  content     Json
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([invoiceType, isDefault])
+}
+
 model InvoiceDocument {
   id           String              @id @default(cuid())
   invoiceId    String
