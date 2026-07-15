@@ -31,6 +31,14 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const message = this.resolveMessage(exception);
     const error = this.resolveErrorCode(exception, statusCode);
 
+    if (!(exception instanceof HttpException)) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[ApiExceptionFilter] Unhandled error on ${request.method} ${request.originalUrl ?? request.url}:`,
+        exception,
+      );
+    }
+
     const payload: ApiErrorResponse = {
       success: false,
       statusCode,
