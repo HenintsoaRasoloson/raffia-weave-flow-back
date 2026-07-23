@@ -6,6 +6,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { AdminGuard } from './guards/admin.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -35,6 +36,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Se connecter' })
   @ApiOkResponse({ type: AuthSessionDto })
   login(@Body() dto: LoginDto) {
@@ -42,6 +44,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiOperation({ summary: 'Rafraîchir les tokens' })
   @ApiOkResponse({ type: AuthSessionDto })
   refresh(@Body() dto: RefreshDto) {

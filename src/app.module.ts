@@ -1,5 +1,6 @@
-import { CacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -20,6 +21,7 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { SalesOrdersModule } from './sales-orders/sales-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { AuditModule } from './common/audit.module';
+import { AppCacheModule } from './common/cache/app-cache.module';
 import { DocumentReferenceModule } from './common/document-reference/document-reference.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { GedModule } from './ged/ged.module';
@@ -30,10 +32,14 @@ import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
-    CacheModule.register({
-      isGlobal: true,
-      ttl: 30_000,
-    }),
+    AppCacheModule,
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60_000,
+        limit: 120,
+      },
+    ]),
     PrismaModule,
     DocumentReferenceModule,
     AuthModule,
@@ -61,6 +67,12 @@ import { UsersModule } from './users/users.module';
     UsersModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

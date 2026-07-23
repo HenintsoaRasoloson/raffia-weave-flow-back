@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import basicAuth from 'express-basic-auth';
+import helmet from 'helmet';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -7,11 +8,22 @@ import { AppModule } from './app.module';
 import { corsOriginDelegate } from './common/cors.util';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 import { ApiResponseInterceptor } from './common/interceptors/api-response.interceptor';
+import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 
 dotenv.config({ override: true });
 
+const HTTP_REQUEST_TIMEOUT_MS = Number(
+  process.env.HTTP_REQUEST_TIMEOUT_MS ?? 30_000,
+);
+const HTTP_HEADERS_TIMEOUT_MS = Number(
+  process.env.HTTP_HEADERS_TIMEOUT_MS ?? 35_000,
+);
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.use(helmet());
+  app.use(requestIdMiddleware);
 
   // CORS - bonnes pratiques:
   // - pas de "*" en prod
@@ -20,7 +32,8 @@ async function bootstrap() {
   app.enableCors({
     origin: corsOriginDelegate,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    exposedHeaders: ['X-Request-Id'],
     credentials: true,
     optionsSuccessStatus: 204,
     maxAge: 86400,
@@ -66,6 +79,9 @@ async function bootstrap() {
   const documentFactory = () => SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup(swaggerPath, app, documentFactory);
 
-  await app.listen(process.env.PORT ?? 3000);
+  const server = await app.listen(process.env.PORT ?? 3000);
+  server.setTimeout(HTTP_REQUEST_TIMEOUT_MS);
+  server.headersTimeout = HTTP_HEADERS_TIMEOUT_MS;
+  server.requestTimeout = HTTP_REQUEST_TIMEOUT_MS;
 }
 bootstrap();

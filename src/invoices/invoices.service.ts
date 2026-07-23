@@ -1,6 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
-import { dirname, join } from 'path';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client';
 import {
   InvoiceStatus,
@@ -14,18 +12,16 @@ import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compression.util';
-import { DEFAULT_GED_BUCKET_ARCHIVE } from '../ged/ged.constants';
-import { GedPathsService } from '../ged/ged-paths.service';
 import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
 import { BUSINESS_DOC_LEVEL_LENGTH } from '../common/document-reference/document-reference.constants';
-import { MinioService } from '../ged/minio.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { UploadInvoiceDocumentDto } from './dto/upload-invoice-document.dto';
 import { InvoiceTemplateResponseDto } from './dto/invoice-template-response.dto';
 import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { InvoiceDocumentsService } from './invoice-documents.service';
+import { InvoicePaymentsService } from './invoice-payments.service';
 
 const INVOICE_TYPES = Object.values(InvoiceType);
 type InvoiceTypeValue = (typeof INVOICE_TYPES)[number];
@@ -33,13 +29,15 @@ const INVOICE_SORT_FIELDS = ['issueDate', 'createdAt', 'dueDate', 'totalTtc', 'i
 
 @Injectable()
 export class InvoicesService {
+  private readonly logger = new Logger(InvoicesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
-    private readonly minioService: MinioService,
-    private readonly gedPathsService: GedPathsService,
     private readonly documentReferenceService: DocumentReferenceService,
+    private readonly documentsService: InvoiceDocumentsService,
+    private readonly paymentsService: InvoicePaymentsService,
   ) {}
 
   async findAll(query: ListQueryDto) {
@@ -88,168 +86,46 @@ export class InvoicesService {
     });
   }
 
-  async listDocuments(invoiceId: string) {
-    await this.ensureInvoiceExists(invoiceId);
-    return this.prisma.invoiceDocument.findMany({
-      where: { invoiceId },
-      orderBy: { createdAt: 'desc' },
-    }).then((items) =>
-      items.map((item) => ({
-        ...item,
-        version: this.extractVersion(item.objectKey ?? item.storagePath),
-      })),
-    );
+  listDocuments(invoiceId: string) {
+    return this.documentsService.listDocuments(invoiceId);
   }
 
-  async deleteDocument(invoiceId: string, documentId: string) {
-    const document = await this.prisma.invoiceDocument.findFirst({
-      where: { id: documentId, invoiceId },
-    });
-    if (!document) {
-      throw new NotFoundException('Document de facture introuvable');
-    }
-
-    await this.removeStoredObject(document);
-    await this.prisma.invoiceDocument.delete({ where: { id: documentId } });
-    return { id: documentId, deleted: true };
+  deleteDocument(invoiceId: string, documentId: string) {
+    return this.documentsService.deleteDocument(invoiceId, documentId);
   }
 
-  async replaceDocument(
+  replaceDocument(
     invoiceId: string,
     documentId: string,
     file: Express.Multer.File,
     userId?: string,
   ) {
-    const existing = await this.prisma.invoiceDocument.findFirst({
-      where: { id: documentId, invoiceId },
-    });
-    if (!existing) {
-      throw new NotFoundException('Document de facture introuvable');
-    }
-    if (!file) {
-      throw new BadRequestException('Aucun fichier reçu. Champ attendu: file');
-    }
-
-    const nextVersion =
-      this.extractVersion(existing.objectKey ?? existing.storagePath) + 1;
-
-    const created = await this.uploadDocument(
+    return this.documentsService.replaceDocument(
       invoiceId,
-      { kind: existing.kind },
+      documentId,
       file,
       userId,
-      { version: nextVersion },
     );
-
-    return {
-      replacedDocumentId: documentId,
-      newDocumentId: created.id,
-      version: nextVersion,
-      document: created,
-    };
   }
 
-  async uploadDocument(
+  uploadDocument(
     invoiceId: string,
     dto: UploadInvoiceDocumentDto,
     file: Express.Multer.File,
     userId?: string,
     options?: { version?: number },
   ) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id: invoiceId },
-      select: { id: true, referenceLevel: true },
-    });
-    if (!invoice) {
-      throw new NotFoundException('Facture introuvable');
-    }
-    if (!file) {
-      throw new BadRequestException('Aucun fichier reçu. Champ attendu: file');
-    }
-
-    const { buffer: storedBuffer, algo } = compressBufferIfNeeded(
-      file.buffer,
-      file.mimetype,
+    return this.documentsService.uploadDocument(
+      invoiceId,
+      dto,
+      file,
+      userId,
+      options,
     );
-
-    const objectKey = this.gedPathsService.buildObjectKey({
-      domain: 'finance',
-      entityType: 'invoice',
-      entityId: invoiceId,
-      documentType: `signed-${dto.kind.toLowerCase()}`,
-      originalFileName: file.originalname,
-      version: options?.version,
-    });
-
-    const storedName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    let bucket: string | null = null;
-    let persistedObjectKey: string | null = null;
-    let storagePath: string | null = null;
-
-    if (this.minioService.isEnabled()) {
-      bucket = DEFAULT_GED_BUCKET_ARCHIVE;
-      persistedObjectKey = objectKey;
-      await this.minioService.putObject({
-        bucket,
-        key: objectKey,
-        body: storedBuffer,
-        contentType: file.mimetype,
-        contentEncoding: algo === 'GZIP' ? 'gzip' : undefined,
-      });
-    } else {
-      storagePath = join(process.cwd(), 'uploads', 'invoices', objectKey);
-      await mkdir(dirname(storagePath), { recursive: true });
-      await writeFile(storagePath, storedBuffer);
-    }
-
-    return this.prisma.invoiceDocument.create({
-      data: {
-        invoiceId,
-        referenceLevel: invoice.referenceLevel,
-        kind: dto.kind,
-        originalName: file.originalname,
-        storedName,
-        mimeType: file.mimetype,
-        fileSize: file.size,
-        storagePath,
-        bucket,
-        objectKey: persistedObjectKey,
-        originalSize: file.size,
-        compressedSize: storedBuffer.length,
-        compressionAlgo: algo,
-        uploadedById: userId,
-      },
-    });
   }
 
-  async getDocumentForDownload(invoiceId: string, documentId: string) {
-    const document = await this.prisma.invoiceDocument.findFirst({
-      where: {
-        id: documentId,
-        invoiceId,
-      },
-    });
-
-    if (!document) {
-      throw new NotFoundException('Document de facture introuvable');
-    }
-
-    let storedBuffer: Buffer;
-    if (document.bucket && document.objectKey && this.minioService.isEnabled()) {
-      storedBuffer = await this.minioService.getObjectAsBuffer({
-        bucket: document.bucket,
-        key: document.objectKey,
-      });
-    } else if (document.storagePath) {
-      storedBuffer = await readFile(document.storagePath);
-    } else {
-      throw new NotFoundException('Fichier de facture indisponible');
-    }
-
-    return {
-      ...document,
-      buffer: decompressBufferIfNeeded(storedBuffer, document.compressionAlgo),
-    };
+  getDocumentForDownload(invoiceId: string, documentId: string) {
+    return this.documentsService.getDocumentForDownload(invoiceId, documentId);
   }
 
   listTemplates(): Promise<InvoiceTemplateResponseDto[]> {
@@ -418,7 +294,13 @@ export class InvoicesService {
         },
         actionUrl: `/invoices/${created.id}`,
         priority: 'normal',
-      }).catch((err) => console.error('Notification proforma error:', err));
+      }).catch((err) =>
+        this.logger.error({
+          msg: 'Notification proforma error',
+          invoiceId: created.id,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
     }
 
     return created;
@@ -515,253 +397,16 @@ export class InvoicesService {
     });
   }
 
-  async markPaid(id: string) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id },
-      select: { status: true, type: true, totalTtc: true },
-    });
-    if (!invoice) {
-      throw new NotFoundException('Facture introuvable');
-    }
-
-    const current = invoice.status;
-    if (current === InvoiceStatus.PAID) {
-      throw new BadRequestException('La facture est deja payee');
-    }
-    if (current === InvoiceStatus.CANCELLED || current === InvoiceStatus.DRAFT) {
-      throw new BadRequestException(
-        `Transition invalide: ${current} -> PAID`,
-      );
-    }
-    if (invoice.type === InvoiceType.CREDIT_NOTE) {
-      throw new BadRequestException(
-        'Un avoir ne peut pas etre marque comme paye',
-      );
-    }
-
-    return this.prisma.invoice.update({
-      where: { id },
-      data: {
-        status: InvoiceStatus.PAID,
-        paidAt: new Date(),
-        paidAmount: invoice.totalTtc,
-      },
-    });
+  markPaid(id: string) {
+    return this.paymentsService.markPaid(id);
   }
 
-  async markPaidWithAudit(id: string, userId?: string) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id },
-      select: { status: true, type: true, totalTtc: true },
-    });
-    if (!invoice) {
-      throw new NotFoundException('Facture introuvable');
-    }
-
-    const current = invoice.status;
-    if (current === InvoiceStatus.PAID) {
-      throw new BadRequestException('La facture est deja payee');
-    }
-    if (current === InvoiceStatus.CANCELLED || current === InvoiceStatus.DRAFT) {
-      throw new BadRequestException(
-        `Transition invalide: ${current} -> PAID`,
-      );
-    }
-    if (invoice.type === InvoiceType.CREDIT_NOTE) {
-      throw new BadRequestException(
-        'Un avoir ne peut pas etre marque comme paye',
-      );
-    }
-
-    const updated = await this.prisma.invoice.update({
-      where: { id },
-      data: {
-        status: InvoiceStatus.PAID,
-        paidAt: new Date(),
-        paidAmount: invoice.totalTtc,
-      },
-    });
-
-    if (userId) {
-      await this.auditService.log({
-        entityType: 'Invoice',
-        entityId: id,
-        action: 'INVOICE_MARKED_PAID',
-        userId,
-        changes: { status: { before: current, after: 'PAID' } },
-      });
-    }
-
-    return updated;
+  markPaidWithAudit(id: string, userId?: string) {
+    return this.paymentsService.markPaidWithAudit(id, userId);
   }
 
-  async recordPayment(id: string, dto: RecordPaymentDto, userId?: string) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        invoiceNumber: true,
-        status: true,
-        type: true,
-        totalTtc: true,
-        paidAmount: true,
-        currency: true,
-        referenceLevel: true,
-        clientId: true,
-        salesOrderId: true,
-      },
-    });
-    if (!invoice) {
-      throw new NotFoundException('Facture introuvable');
-    }
-    if (invoice.status === InvoiceStatus.PAID) {
-      throw new BadRequestException('La facture est déjà intégralement payée');
-    }
-    if (
-      invoice.status === InvoiceStatus.CANCELLED ||
-      invoice.status === InvoiceStatus.DRAFT
-    ) {
-      throw new BadRequestException(
-        `Impossible d'enregistrer un paiement sur une facture ${invoice.status}`,
-      );
-    }
-
-    const alreadyPaid = Number(invoice.paidAmount ?? 0);
-    const total = Number(invoice.totalTtc);
-    const newPaidAmount = alreadyPaid + dto.amount;
-
-    if (newPaidAmount > total) {
-      throw new BadRequestException(
-        `Le montant encaissé (${newPaidAmount}) dépasse le total TTC (${total})`,
-      );
-    }
-
-    const isFullyPaid = newPaidAmount >= total;
-    const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date();
-
-    return this.prisma.$transaction(async (tx) => {
-      await tx.invoicePayment.create({
-        data: {
-          invoiceId: id,
-          referenceLevel: invoice.referenceLevel,
-          amount: dto.amount,
-          paymentMethod: dto.paymentMethod,
-          paidAt,
-          notes: dto.notes,
-        },
-      });
-
-      const category = await tx.ledgerCategory.upsert({
-        where: { code: 'CLIENT_COLLECTION' },
-        update: {
-          name: 'Encaissement client',
-          entryType: 'INCOME',
-          description: 'Encaissements reels des factures clients',
-          active: true,
-          isSystem: true,
-        },
-        create: {
-          code: 'CLIENT_COLLECTION',
-          name: 'Encaissement client',
-          entryType: 'INCOME',
-          description: 'Encaissements reels des factures clients',
-          active: true,
-          isSystem: true,
-        },
-      });
-
-      await tx.ledgerEntry.create({
-        data: {
-          entryDate: paidAt,
-          label: `Encaissement facture ${invoice.invoiceNumber}`,
-          entryType: 'INCOME',
-          amount: dto.amount,
-          currency: invoice.currency ?? 'MGA',
-          ledgerCategoryId: category.id,
-          clientId: invoice.clientId,
-          salesOrderId: invoice.salesOrderId,
-          invoiceId: invoice.id,
-          notes: dto.notes,
-        },
-      });
-
-      const updated = await tx.invoice.update({
-        where: { id },
-        data: {
-          paidAmount: newPaidAmount,
-          status: isFullyPaid
-            ? InvoiceStatus.PAID
-            : InvoiceStatus.PARTIALLY_PAID,
-          paidAt: isFullyPaid ? paidAt : null,
-        },
-        include: { items: true, client: true, payments: true },
-      });
-
-      if (userId) {
-        // Log AFTER transaction
-        await this.auditService.log({
-          entityType: 'Invoice',
-          entityId: id,
-          action: 'INVOICE_PAYMENT_RECORDED',
-          userId,
-          changes: {
-            paidAmount: { before: alreadyPaid, after: newPaidAmount },
-            paymentMethod: { after: dto.paymentMethod },
-          },
-          details: `${dto.amount} ${invoice.currency ?? 'MGA'} par ${dto.paymentMethod}`,
-        });
-      }
-
-      // Notifier selon le montant du paiement
-      if (dto.amount > 5000) {
-        await this.notificationsService.notifyRole('GERANT', {
-          type: 'large_payment_received',
-          title: '💰 Paiement important reçu',
-          message: `${dto.amount.toFixed(2)} ${updated.currency ?? 'MGA'} - Facture ${updated.invoiceNumber}`,
-          data: {
-            invoiceId: id,
-            amount: dto.amount,
-            clientName: updated.client?.name,
-            paymentMethod: dto.paymentMethod,
-          },
-          actionUrl: `/invoices/${id}`,
-          priority: 'high',
-        });
-      }
-
-      // Toujours notifier le responsable financier
-      await this.notificationsService.notifyRole(
-        'RESPONSABLE_FINANCIER_STOCKS',
-        {
-          type: 'payment_recorded',
-          title: '📝 Paiement enregistré',
-          message: `${dto.amount.toFixed(2)} ${updated.currency ?? 'MGA'} - ${updated.invoiceNumber}`,
-          data: {
-            invoiceId: id,
-            amount: dto.amount,
-            status: updated.status,
-          },
-          actionUrl: `/invoices/${id}`,
-        },
-      );
-
-      // Notifier si facture entièrement payée
-      if (isFullyPaid) {
-        await this.notificationsService.notifyRoles(
-          ['GERANT', 'RESPONSABLE_GENERAL'],
-          {
-            type: 'invoice_fully_paid',
-            title: '✅ Facture intégralement payée',
-            message: `${updated.invoiceNumber} (${newPaidAmount.toFixed(2)} ${updated.currency ?? 'MGA'})`,
-            data: { invoiceId: id, totalAmount: newPaidAmount },
-            actionUrl: `/invoices/${id}`,
-          },
-        )
-          .catch((err) => console.error('Notification error:', err));
-      }
-
-      return updated;
-    });
+  recordPayment(id: string, dto: RecordPaymentDto, userId?: string) {
+    return this.paymentsService.recordPayment(id, dto, userId);
   }
 
   remove(id: string) {
@@ -817,38 +462,4 @@ export class InvoicesService {
     };
   }
 
-  private async ensureInvoiceExists(invoiceId: string) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id: invoiceId },
-      select: { id: true },
-    });
-
-    if (!invoice) {
-      throw new NotFoundException('Facture introuvable');
-    }
-  }
-
-  private extractVersion(pathLike?: string | null): number {
-    if (!pathLike) return 1;
-    const match = pathLike.match(/\/v(\d+)\//);
-    return match ? Number(match[1]) : 1;
-  }
-
-  private async removeStoredObject(document: {
-    bucket: string | null;
-    objectKey: string | null;
-    storagePath: string | null;
-  }) {
-    if (document.bucket && document.objectKey && this.minioService.isEnabled()) {
-      await this.minioService.removeObject({
-        bucket: document.bucket,
-        key: document.objectKey,
-      });
-      return;
-    }
-
-    if (document.storagePath) {
-      await unlink(document.storagePath).catch(() => undefined);
-    }
-  }
 }

@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ProductionStage, ProductionStatus } from '../generated/prisma/client';
 import type { AuditService } from '../common/audit.service';
 import type { DocumentReferenceService } from '../common/document-reference/document-reference.service';
+import { lockComponentsForUpdate } from '../common/stock/stock-lock.util';
 import type { NotificationsService } from '../notifications/notifications.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SalesOrdersService } from '../sales-orders/sales-orders.service';
@@ -9,6 +10,10 @@ import { ProductionOrdersService } from './production-orders.service';
 
 jest.mock('../prisma/prisma.service', () => ({
   PrismaService: class PrismaService {},
+}));
+
+jest.mock('../common/stock/stock-lock.util', () => ({
+  lockComponentsForUpdate: jest.fn(),
 }));
 
 function createDocumentReferenceMock(): DocumentReferenceService {
@@ -188,5 +193,155 @@ describe('ProductionOrdersService planning', () => {
         }),
       }),
     );
+  });
+});
+
+describe('ProductionOrdersService consumeMaterials', () => {
+  const lockMock = lockComponentsForUpdate as jest.MockedFunction<
+    typeof lockComponentsForUpdate
+  >;
+
+  beforeEach(() => {
+    lockMock.mockReset();
+  });
+
+  it('consumes BOM stock atomically and marks materialsConsumedAt', async () => {
+    const updatedOrder = {
+      id: 'of-1',
+      status: ProductionStatus.IN_PROGRESS,
+      materialsConsumedAt: new Date('2026-07-23T10:00:00.000Z'),
+    };
+    const tx = {
+      productionOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'of-1',
+          quantity: 2,
+          status: ProductionStatus.PLANNED,
+          materialsConsumedAt: null,
+          product: {
+            bomItems: [{ componentId: 'comp-1', quantity: 3 }],
+          },
+        }),
+        update: jest.fn().mockResolvedValue(updatedOrder),
+      },
+      component: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn().mockImplementation(async (cb) => cb(tx)),
+    } as unknown as PrismaService;
+    const audit = { log: jest.fn() } as unknown as AuditService;
+
+    lockMock.mockResolvedValue(
+      new Map([
+        [
+          'comp-1',
+          { id: 'comp-1', ref: 'C1', name: 'Raphia', stockQty: 10 },
+        ],
+      ]),
+    );
+
+    const service = new ProductionOrdersService(
+      prisma,
+      audit,
+      {} as NotificationsService,
+      createDocumentReferenceMock(),
+      {} as SalesOrdersService,
+    );
+
+    const result = await service.consumeMaterials('of-1', 'user-1');
+
+    expect(lockMock).toHaveBeenCalledWith(tx, ['comp-1']);
+    expect(tx.component.update).toHaveBeenCalledWith({
+      where: { id: 'comp-1' },
+      data: { stockQty: { decrement: 6 } },
+    });
+    expect(tx.productionOrder.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: ProductionStatus.IN_PROGRESS,
+          materialsConsumedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'PRODUCTION_MATERIALS_CONSUMED',
+        entityId: 'of-1',
+        userId: 'user-1',
+      }),
+    );
+    expect(result).toEqual(updatedOrder);
+  });
+
+  it('rejects double consumption', async () => {
+    const tx = {
+      productionOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'of-1',
+          quantity: 1,
+          status: ProductionStatus.IN_PROGRESS,
+          materialsConsumedAt: new Date(),
+          product: { bomItems: [{ componentId: 'comp-1', quantity: 1 }] },
+        }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn().mockImplementation(async (cb) => cb(tx)),
+    } as unknown as PrismaService;
+
+    const service = new ProductionOrdersService(
+      prisma,
+      { log: jest.fn() } as unknown as AuditService,
+      {} as NotificationsService,
+      createDocumentReferenceMock(),
+      {} as SalesOrdersService,
+    );
+
+    await expect(service.consumeMaterials('of-1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(lockMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects when stock is insufficient', async () => {
+    const tx = {
+      productionOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'of-1',
+          quantity: 5,
+          status: ProductionStatus.PLANNED,
+          materialsConsumedAt: null,
+          product: { bomItems: [{ componentId: 'comp-1', quantity: 2 }] },
+        }),
+      },
+      component: { update: jest.fn() },
+    };
+    const prisma = {
+      $transaction: jest.fn().mockImplementation(async (cb) => cb(tx)),
+    } as unknown as PrismaService;
+
+    lockMock.mockResolvedValue(
+      new Map([
+        [
+          'comp-1',
+          { id: 'comp-1', ref: 'C1', name: 'Raphia', stockQty: 3 },
+        ],
+      ]),
+    );
+
+    const service = new ProductionOrdersService(
+      prisma,
+      { log: jest.fn() } as unknown as AuditService,
+      {} as NotificationsService,
+      createDocumentReferenceMock(),
+      {} as SalesOrdersService,
+    );
+
+    await expect(service.consumeMaterials('of-1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(tx.component.update).not.toHaveBeenCalled();
   });
 });

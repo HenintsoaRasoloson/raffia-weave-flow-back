@@ -4,8 +4,13 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import {
+  REQUEST_ID_HEADER,
+  type RequestWithId,
+} from '../middleware/request-id.middleware';
 
 type ApiErrorResponse = {
   success: false;
@@ -14,14 +19,19 @@ type ApiErrorResponse = {
   message: string;
   path: string;
   timestamp: string;
+  requestId?: string;
 };
 
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(ApiExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<RequestWithId>();
+    const requestId =
+      request.requestId ?? request.header(REQUEST_ID_HEADER) ?? undefined;
 
     const statusCode =
       exception instanceof HttpException
@@ -32,11 +42,26 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const error = this.resolveErrorCode(exception, statusCode);
 
     if (!(exception instanceof HttpException)) {
-      // eslint-disable-next-line no-console
-      console.error(
-        `[ApiExceptionFilter] Unhandled error on ${request.method} ${request.originalUrl ?? request.url}:`,
-        exception,
-      );
+      this.logger.error({
+        msg: 'Unhandled exception',
+        requestId,
+        method: request.method,
+        path: request.originalUrl ?? request.url,
+        error:
+          exception instanceof Error
+            ? { name: exception.name, message: exception.message, stack: exception.stack }
+            : { message: String(exception) },
+      });
+    } else if (statusCode >= 500) {
+      this.logger.error({
+        msg: 'HTTP 5xx exception',
+        requestId,
+        method: request.method,
+        path: request.originalUrl ?? request.url,
+        statusCode,
+        error,
+        message,
+      });
     }
 
     const payload: ApiErrorResponse = {
@@ -46,7 +71,12 @@ export class ApiExceptionFilter implements ExceptionFilter {
       message,
       path: request.originalUrl ?? request.url,
       timestamp: new Date().toISOString(),
+      ...(requestId ? { requestId } : {}),
     };
+
+    if (requestId) {
+      response.setHeader(REQUEST_ID_HEADER, requestId);
+    }
 
     response.status(statusCode).json(payload);
   }

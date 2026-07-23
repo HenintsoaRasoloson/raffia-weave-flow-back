@@ -16,6 +16,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ListQueryDto } from '../common/dto/list-query.dto';
@@ -44,6 +45,7 @@ export class CatalogSharesController {
   }
 
   @Get('public/:token')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Consulter un catalogue partagé via token' })
   @ApiOkResponse({ type: CatalogShareResponseDto })
   getPublicByToken(@Param('token') token: string) {
