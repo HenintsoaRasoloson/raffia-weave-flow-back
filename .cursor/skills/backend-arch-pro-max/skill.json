@@ -1,0 +1,30 @@
+{
+  "name": "backend-arch-pro-max",
+  "displayName": "Backend Arch Pro Max",
+  "description": "AI-powered backend architecture intelligence for APIs, databases, caching, async processing, resilience, security, observability, and production-grade service design.",
+  "version": "0.2.0",
+  "author": "Agent-Skills",
+  "license": "MIT",
+  "keywords": [
+    "backend",
+    "api",
+    "architecture",
+    "database",
+    "security",
+    "caching",
+    "queue",
+    "observability",
+    "resilience",
+    "ai-skill"
+  ],
+  "platforms": [
+    "codex",
+    "claude",
+    "cursor",
+    "windsurf",
+    "antigravity",
+    "copilot",
+    "gemini"
+  ],
+  "install": "npx backend-arch-pro-max-cli init --ai {{platform}}"
+}

@@ -1,0 +1,84 @@
+{
+  "platforms": [
+    {
+      "platform": "codex",
+      "displayName": "Codex",
+      "installType": "full",
+      "folderStructure": {
+        "root": ".codex",
+        "skillPath": "skills/backend-arch-pro-max",
+        "filename": "SKILL.md"
+      },
+      "scriptPath": "skills/backend-arch-pro-max/scripts/search.py",
+      "frontmatter": {
+        "name": "backend-arch-pro-max",
+        "description": "Backend architecture intelligence for APIs, databases, auth, queues, caching, resilience, observability, and anti-pattern review."
+      },
+      "skillOrWorkflow": "Skill"
+    },
+    {
+      "platform": "claude",
+      "displayName": "Claude Code",
+      "installType": "full",
+      "folderStructure": {
+        "root": ".claude",
+        "skillPath": "skills/backend-arch-pro-max",
+        "filename": "SKILL.md"
+      },
+      "scriptPath": "skills/backend-arch-pro-max/scripts/search.py",
+      "frontmatter": {
+        "name": "backend-arch-pro-max",
+        "description": "Backend architecture intelligence. Use for API design, database design, auth systems, queues, caching, resilience, observability, service layer, repository pattern, transactions, and backend review."
+      },
+      "skillOrWorkflow": "Skill"
+    },
+    {
+      "platform": "cursor",
+      "displayName": "Cursor",
+      "installType": "full",
+      "folderStructure": {
+        "root": ".cursor",
+        "skillPath": "skills/backend-arch-pro-max",
+        "filename": "SKILL.md"
+      },
+      "scriptPath": "skills/backend-arch-pro-max/scripts/search.py",
+      "frontmatter": {
+        "name": "backend-arch-pro-max",
+        "description": "Backend architecture intelligence with searchable rules for APIs, databases, caching, security, async workers, resilience, and observability."
+      },
+      "skillOrWorkflow": "Skill"
+    },
+    {
+      "platform": "windsurf",
+      "displayName": "Windsurf",
+      "installType": "full",
+      "folderStructure": {
+        "root": ".windsurf",
+        "skillPath": "skills/backend-arch-pro-max",
+        "filename": "SKILL.md"
+      },
+      "scriptPath": "skills/backend-arch-pro-max/scripts/search.py",
+      "frontmatter": {
+        "name": "backend-arch-pro-max",
+        "description": "Backend architecture intelligence for production API, database, auth, queue, cache, resilience, and observability work."
+      },
+      "skillOrWorkflow": "Skill"
+    },
+    {
+      "platform": "antigravity",
+      "displayName": "Antigravity / Generic Agent",
+      "installType": "full",
+      "folderStructure": {
+        "root": ".agent",
+        "skillPath": "skills/backend-arch-pro-max",
+        "filename": "SKILL.md"
+      },
+      "scriptPath": "skills/backend-arch-pro-max/scripts/search.py",
+      "frontmatter": {
+        "name": "backend-arch-pro-max",
+        "description": "Backend architecture intelligence for APIs, databases, auth, queues, caching, resilience, observability, and anti-pattern review."
+      },
+      "skillOrWorkflow": "Skill"
+    }
+  ]
+}

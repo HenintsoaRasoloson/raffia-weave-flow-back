@@ -1,0 +1,16 @@
+{
+  "platform": "claude",
+  "displayName": "Claude Code",
+  "installType": "full",
+  "folderStructure": {
+    "root": ".claude",
+    "skillPath": "skills/backend-arch-pro-max",
+    "filename": "SKILL.md"
+  },
+  "scriptPath": "skills/backend-arch-pro-max/scripts/search.py",
+  "frontmatter": {
+    "name": "backend-arch-pro-max",
+    "description": "Backend architecture intelligence. Use for API design, database design, auth systems, queues, caching, resilience, observability, service layer, repository pattern, transactions, and backend review."
+  },
+  "skillOrWorkflow": "Skill"
+}

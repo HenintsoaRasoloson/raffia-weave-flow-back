@@ -1,0 +1,16 @@
+{
+  "platform": "windsurf",
+  "displayName": "Windsurf",
+  "installType": "full",
+  "folderStructure": {
+    "root": ".windsurf",
+    "skillPath": "skills/backend-arch-pro-max",
+    "filename": "SKILL.md"
+  },
+  "scriptPath": "skills/backend-arch-pro-max/scripts/search.py",
+  "frontmatter": {
+    "name": "backend-arch-pro-max",
+    "description": "Backend architecture intelligence for production API, database, auth, queue, cache, resilience, and observability work."
+  },
+  "skillOrWorkflow": "Skill"
+}

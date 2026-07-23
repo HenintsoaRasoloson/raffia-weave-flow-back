@@ -1,0 +1,16 @@
+{
+  "platform": "cursor",
+  "displayName": "Cursor",
+  "installType": "full",
+  "folderStructure": {
+    "root": ".cursor",
+    "skillPath": "skills/backend-arch-pro-max",
+    "filename": "SKILL.md"
+  },
+  "scriptPath": "skills/backend-arch-pro-max/scripts/search.py",
+  "frontmatter": {
+    "name": "backend-arch-pro-max",
+    "description": "Backend architecture intelligence with searchable rules for APIs, databases, caching, security, async workers, resilience, and observability."
+  },
+  "skillOrWorkflow": "Skill"
+}

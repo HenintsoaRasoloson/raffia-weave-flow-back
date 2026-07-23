@@ -1,0 +1,7 @@
+interface:
+  display_name: "Backend Arch Pro Max"
+  short_description: "Backend architecture rules for APIs and services"
+  default_prompt: "Use $backend-arch-pro-max to design a production-ready backend architecture for my API."
+
+policy:
+  allow_implicit_invocation: true
