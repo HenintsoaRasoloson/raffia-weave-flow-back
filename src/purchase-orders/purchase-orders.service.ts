@@ -161,46 +161,64 @@ export class PurchaseOrdersService {
   }
 
   async markReceived(id: string) {
-    const purchaseOrder = await this.prisma.purchaseOrder.findUnique({
-      where: { id },
-      include: { items: true },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const purchaseOrder = await tx.purchaseOrder.findUnique({
+        where: { id },
+        include: { items: true },
+      });
 
-    if (!purchaseOrder) {
-      throw new NotFoundException('Bon de commande introuvable');
-    }
+      if (!purchaseOrder) {
+        throw new NotFoundException('Bon de commande introuvable');
+      }
 
-    const current = purchaseOrder.status;
-    if (current === PurchaseOrderStatus.CANCELLED) {
-      throw new BadRequestException('Un bon de commande annule ne peut pas etre recu');
-    }
+      if (purchaseOrder.status === PurchaseOrderStatus.CANCELLED) {
+        throw new BadRequestException(
+          'Un bon de commande annule ne peut pas etre recu',
+        );
+      }
 
-    if (current === PurchaseOrderStatus.RECEIVED) {
-      throw new BadRequestException('Le bon de commande est deja recu');
-    }
+      if (purchaseOrder.status === PurchaseOrderStatus.RECEIVED) {
+        throw new BadRequestException('Le bon de commande est deja recu');
+      }
 
-    const updated = await this.prisma.purchaseOrder.update({
-      where: { id },
-      data: {
-        status: PurchaseOrderStatus.RECEIVED,
-        receivedAt: new Date(),
-      },
-      include: { supplier: true, items: true, payments: true },
-    });
+      const claimed = await tx.purchaseOrder.updateMany({
+        where: {
+          id,
+          status: {
+            notIn: [
+              PurchaseOrderStatus.RECEIVED,
+              PurchaseOrderStatus.CANCELLED,
+            ],
+          },
+        },
+        data: {
+          status: PurchaseOrderStatus.RECEIVED,
+          receivedAt: new Date(),
+        },
+      });
 
-    // Mettre à jour le stock des composants reçus
-    for (const item of purchaseOrder.items) {
-      if (item.componentId) {
-        await this.prisma.component.update({
+      if (claimed.count !== 1) {
+        throw new BadRequestException('Le bon de commande est deja recu');
+      }
+
+      for (const item of purchaseOrder.items) {
+        if (!item.componentId) {
+          continue;
+        }
+
+        await tx.component.update({
           where: { id: item.componentId },
           data: {
             stockQty: { increment: item.quantity },
           },
-        }).catch(() => undefined);
+        });
       }
-    }
 
-    return updated;
+      return tx.purchaseOrder.findUniqueOrThrow({
+        where: { id },
+        include: { supplier: true, items: true, payments: true },
+      });
+    });
   }
 
   async recordPayment(id: string, dto: RecordPurchaseOrderPaymentDto) {

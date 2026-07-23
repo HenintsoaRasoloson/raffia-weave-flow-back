@@ -49,6 +49,7 @@ describe('PurchaseOrdersService', () => {
 
   it('throws when marking received on missing purchase order', async () => {
     const prisma = {
+      $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
       purchaseOrder: {
         findUnique: jest.fn().mockResolvedValue(null),
       },
@@ -65,6 +66,7 @@ describe('PurchaseOrdersService', () => {
 
   it('throws when marking received on cancelled purchase order', async () => {
     const prisma = {
+      $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
       purchaseOrder: {
         findUnique: jest.fn().mockResolvedValue({ status: 'CANCELLED' }),
       },
@@ -77,5 +79,75 @@ describe('PurchaseOrdersService', () => {
     await expect(service.markReceived('po-1')).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  it('receives a purchase order and increments component stock atomically', async () => {
+    const prisma = {
+      $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
+      purchaseOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'po-1',
+          status: 'CONFIRMED',
+          items: [
+            { componentId: 'comp-1', quantity: 4 },
+            { componentId: null, quantity: 1 },
+          ],
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'po-1', status: 'RECEIVED' }),
+      },
+      component: {
+        update: jest.fn().mockResolvedValue({ id: 'comp-1' }),
+      },
+    } as unknown as PrismaService;
+    const service = new PurchaseOrdersService(
+      prisma,
+      createDocumentReferenceMock(),
+    );
+
+    await expect(service.markReceived('po-1')).resolves.toEqual({
+      id: 'po-1',
+      status: 'RECEIVED',
+    });
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.purchaseOrder.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'po-1',
+        status: { notIn: ['RECEIVED', 'CANCELLED'] },
+      },
+      data: {
+        status: 'RECEIVED',
+        receivedAt: expect.any(Date),
+      },
+    });
+    expect(prisma.component.update).toHaveBeenCalledTimes(1);
+    expect(prisma.component.update).toHaveBeenCalledWith({
+      where: { id: 'comp-1' },
+      data: { stockQty: { increment: 4 } },
+    });
+  });
+
+  it('rolls back when component stock update fails during receive', async () => {
+    const prisma = {
+      $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
+      purchaseOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'po-1',
+          status: 'CONFIRMED',
+          items: [{ componentId: 'missing-comp', quantity: 2 }],
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      component: {
+        update: jest.fn().mockRejectedValue(new Error('Component missing')),
+      },
+    } as unknown as PrismaService;
+    const service = new PurchaseOrdersService(
+      prisma,
+      createDocumentReferenceMock(),
+    );
+
+    await expect(service.markReceived('po-1')).rejects.toThrow('Component missing');
   });
 });

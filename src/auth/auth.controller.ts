@@ -7,9 +7,11 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { AdminGuard } from './guards/admin.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { AuthSessionDto } from './dto/auth-session.dto';
+import { AuthUserDto } from './dto/auth-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -20,8 +22,14 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  @ApiOperation({ summary: 'Créer un compte' })
-  @ApiCreatedResponse({ type: AuthSessionDto })
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Créer un compte (admin)',
+    description:
+      'Endpoint réservé aux administrateurs. Préférer POST /users pour spécifier rôle et isAdmin.',
+  })
+  @ApiCreatedResponse({ type: AuthUserDto })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }

@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { corsOriginDelegate } from './common/cors.util';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 import { ApiResponseInterceptor } from './common/interceptors/api-response.interceptor';
 
@@ -16,25 +17,8 @@ async function bootstrap() {
   // - pas de "*" en prod
   // - liste blanche via variable d'env
   // - credentials activé seulement si nécessaire (cookies/session)
-  const corsOrigins = (process.env.CORS_ORIGINS ?? '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
   app.enableCors({
-    origin: (origin, callback): void => {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-
-      if (corsOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error(`Origin ${origin} not allowed by CORS`), false);
-    },
+    origin: corsOriginDelegate,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

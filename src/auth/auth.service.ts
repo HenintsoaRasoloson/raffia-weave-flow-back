@@ -37,7 +37,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<AuthSession> {
+  async register(dto: RegisterDto): Promise<PublicUser> {
     const email = this.normalizeEmail(dto.email);
     const existingUser = await this.prisma.user.findUnique({ where: { email } });
 
@@ -56,7 +56,7 @@ export class AuthService {
       },
     })) as AuthUserRecord;
 
-    return this.createSession(user);
+    return this.toPublicUser(user);
   }
 
   async login(dto: LoginDto): Promise<AuthSession> {
