@@ -1,8 +1,11 @@
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Cache } from 'cache-manager';
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import {
@@ -11,6 +14,7 @@ import {
   normalizeCurrency,
 } from '../common/currency/currency.util';
 import { AuditService } from '../common/audit.service';
+import { CACHE_KEYS, CACHE_TTL_MS } from '../common/cache/cache-keys';
 import type { CompanyLogo, CompanyLogoKind } from '../generated/prisma/client';
 import { decompressBufferIfNeeded } from '../ged/compression.util';
 import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
@@ -60,14 +64,28 @@ export class CompanySettingsService {
     private readonly minioService: MinioService,
     private readonly gedPathsService: GedPathsService,
     private readonly auditService: AuditService,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
   async getSettings(): Promise<CompanySettingsResponseDto> {
+    const cached = await this.cache.get<CompanySettingsResponseDto>(
+      CACHE_KEYS.companySettings,
+    );
+    if (cached) {
+      return cached;
+    }
+
     const settings = await this.ensureSettings();
     const logos = await this.prisma.companyLogo.findMany({
       where: { companySettingId: settings.id },
     });
-    return this.toSettingsResponse(settings, logos);
+    const response = await this.toSettingsResponse(settings, logos);
+    await this.cache.set(
+      CACHE_KEYS.companySettings,
+      response,
+      CACHE_TTL_MS.companySettings,
+    );
+    return response;
   }
 
   async updateSettings(
@@ -115,6 +133,7 @@ export class CompanySettingsService {
       });
     }
 
+    await this.invalidateSettingsCache();
     return this.toSettingsResponse(updated, updated.logos);
   }
 
@@ -222,6 +241,7 @@ export class CompanySettingsService {
           uploadedById: userId,
         },
       });
+      await this.invalidateSettingsCache();
       return this.toLogoResponse(updated);
     }
 
@@ -241,6 +261,7 @@ export class CompanySettingsService {
       },
     });
 
+    await this.invalidateSettingsCache();
     return this.toLogoResponse(created);
   }
 
@@ -262,6 +283,7 @@ export class CompanySettingsService {
 
     await this.removeStoredObject(existing);
     await this.prisma.companyLogo.delete({ where: { id: existing.id } });
+    await this.invalidateSettingsCache();
 
     return { kind, deleted: true };
   }
@@ -322,6 +344,10 @@ export class CompanySettingsService {
       return null;
     }
     return `data:${binary.mimeType};base64,${binary.buffer.toString('base64')}`;
+  }
+
+  private async invalidateSettingsCache() {
+    await this.cache.del(CACHE_KEYS.companySettings);
   }
 
   private async ensureSettings() {

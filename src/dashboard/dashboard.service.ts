@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Inject, Injectable } from '@nestjs/common';
+import type { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 import { SALES_ORDER_IN_PROGRESS_STATUSES } from '../common/domain/sales-order-status.transitions';
+import { CACHE_KEYS, CACHE_TTL_MS } from '../common/cache/cache-keys';
 import { FinancialTrackingService } from '../financial-tracking/financial-tracking.service';
 import {
   KpiDto,
@@ -51,9 +54,16 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly financialTrackingService: FinancialTrackingService,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
   async getDashboard(days: number = 30): Promise<DashboardDto> {
+    const cacheKey = CACHE_KEYS.dashboard(days);
+    const cached = await this.cache.get<DashboardDto>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const [kpis, revenueSeries, productionOrders, recentOrders, alerts, quickStats] =
       await Promise.all([
         this.getKpis(days),
@@ -64,7 +74,7 @@ export class DashboardService {
         this.getQuickStats(),
       ]);
 
-    return {
+    const response = {
       kpis,
       revenueSeries,
       productionOrders,
@@ -72,9 +82,17 @@ export class DashboardService {
       alerts,
       quickStats,
     };
+    await this.cache.set(cacheKey, response, CACHE_TTL_MS.dashboard);
+    return response;
   }
 
   async getKpis(days: number = 30): Promise<KpiDto[]> {
+    const cacheKey = CACHE_KEYS.dashboardKpis(days);
+    const cached = await this.cache.get<KpiDto[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const since = new Date();
     since.setDate(since.getDate() - days);
 
@@ -132,7 +150,7 @@ export class DashboardService {
     const previousTreasury = previousOverview.treasury.trackedBalance;
     const treasuryDelta = treasury - previousTreasury;
 
-    return [
+    const kpis: KpiDto[] = [
       {
         label: "Chiffre d'affaires",
         value: `€${(currentCA / 1000).toFixed(1)}k`,
@@ -162,6 +180,8 @@ export class DashboardService {
         hint: 'disponible',
       },
     ];
+    await this.cache.set(cacheKey, kpis, CACHE_TTL_MS.dashboard);
+    return kpis;
   }
 
   async getRevenueChart(months: number = 8): Promise<RevenueSeries[]> {

@@ -65,6 +65,7 @@ describe('CompanySettingsService', () => {
       minio,
       gedPaths,
       { log: jest.fn() } as never,
+      { get: jest.fn(), set: jest.fn(), del: jest.fn() } as never,
     );
     expect(() => service.parseLogoKind('favicon')).toThrow(BadRequestException);
     expect(service.parseLogoKind('INVOICE')).toBe('invoice');
@@ -80,7 +81,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never);
+    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never, { get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), del: jest.fn() } as never);
     const result = await service.getSettings();
 
     expect(result.logoSlots).toHaveLength(4);
@@ -93,6 +94,39 @@ describe('CompanySettingsService', () => {
     expect(result.eurToMgaRate).toBe(5000);
   });
 
+  it('getSettings returns cached payload without hitting prisma logos', async () => {
+    const cached = {
+      id: 'cst1',
+      companyName: 'Cached',
+      defaultCurrency: 'MGA',
+      eurToMgaRate: 5000,
+      logoSlots: [],
+    };
+    const prisma = {
+      companySetting: { findFirst: jest.fn() },
+      companyLogo: { findMany: jest.fn() },
+    } as unknown as PrismaService;
+    const cache = {
+      get: jest.fn().mockResolvedValue(cached),
+      set: jest.fn(),
+      del: jest.fn(),
+    };
+
+    const service = new CompanySettingsService(
+      prisma,
+      minio,
+      gedPaths,
+      { log: jest.fn() } as never,
+      cache as never,
+    );
+    const result = await service.getSettings();
+
+    expect(result).toBe(cached);
+    expect(prisma.companySetting.findFirst).not.toHaveBeenCalled();
+    expect(prisma.companyLogo.findMany).not.toHaveBeenCalled();
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
   it('convertCurrency converts MGA to EUR with company rate', async () => {
     const prisma = {
       companySetting: {
@@ -100,7 +134,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never);
+    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never, { get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), del: jest.fn() } as never);
     const result = await service.convertCurrency({
       amount: 10000,
       from: 'MGA',
@@ -138,7 +172,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never);
+    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never, { get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), del: jest.fn() } as never);
     const result = await service.getSettings();
     const invoiceSlot = result.logoSlots.find((s) => s.kind === 'invoice');
 
@@ -188,7 +222,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minioEnabled, gedPaths, { log: jest.fn() } as never);
+    const service = new CompanySettingsService(prisma, minioEnabled, gedPaths, { log: jest.fn() } as never, { get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), del: jest.fn() } as never);
     const result = await service.getSettings();
     const primarySlot = result.logoSlots.find((s) => s.kind === 'primary');
 
@@ -213,7 +247,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never);
+    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never, { get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), del: jest.fn() } as never);
     await expect(service.deleteLogo('email')).rejects.toThrow(NotFoundException);
   });
 
@@ -235,7 +269,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never);
+    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never, { get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), del: jest.fn() } as never);
     const file = {
       originalname: 'logo.png',
       mimetype: 'image/png',
