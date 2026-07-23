@@ -15,9 +15,12 @@ export interface AuditLogInput {
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async log(input: AuditLogInput) {
+  /**
+   * Best-effort audit write: never fails the business operation.
+   */
+  async log(input: AuditLogInput): Promise<void> {
     try {
-      return await this.prisma.auditLog.create({
+      await this.prisma.auditLog.create({
         data: {
           entityType: input.entityType,
           entityId: input.entityId,
@@ -28,8 +31,8 @@ export class AuditService {
         },
       });
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error logging audit:', error);
-      throw error;
     }
   }
 

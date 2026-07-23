@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { INestApplication } from '@nestjs/common';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuditController } from './audit.controller';
 import { AuditService } from './audit.service';
 import { SearchController } from '../search/search.controller';
@@ -100,6 +101,8 @@ describe('OpenAPI response schemas (contractualisation)', () => {
       .overrideGuard(JwtAuthGuard)
       .useValue(allowGuard)
       .overrideGuard(AdminGuard)
+      .useValue(allowGuard)
+      .overrideGuard(RolesGuard)
       .useValue(allowGuard)
       .compile();
 

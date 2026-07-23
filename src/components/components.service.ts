@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client';
 import { ComponentOrigin } from '../generated/prisma/client';
+import { AuditService } from '../common/audit.service';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { enumWhere } from '../common/prisma/enum-filter.util';
 import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
@@ -14,7 +15,10 @@ const COMPONENT_SORT_FIELDS = ['createdAt', 'name', 'ref', 'stockQty'] as const;
 
 @Injectable()
 export class ComponentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
@@ -53,14 +57,14 @@ export class ComponentsService {
     });
   }
 
-  create(dto: CreateComponentDto) {
+  async create(dto: CreateComponentDto, userId?: string) {
     const origin = dto.origin ?? ComponentOrigin.PURCHASED;
     if (origin === ComponentOrigin.PURCHASED && !dto.supplierId) {
       throw new BadRequestException(
         'supplierId est requis pour un composant de type PURCHASED (acheté à un fournisseur).',
       );
     }
-    return this.prisma.component.create({
+    const created = await this.prisma.component.create({
       data: {
         ref: dto.ref,
         name: dto.name,
@@ -72,15 +76,40 @@ export class ComponentsService {
         costPerUnit: dto.costPerUnit,
       },
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'Component',
+        entityId: created.id,
+        action: 'STOCK_ADJUSTED',
+        userId,
+        changes: {
+          stockQty: { after: Number(created.stockQty) },
+          ref: { after: created.ref },
+        },
+        details: 'Component created',
+      });
+    }
+
+    return created;
   }
 
-  update(id: string, dto: UpdateComponentDto) {
+  async update(id: string, dto: UpdateComponentDto, userId?: string) {
     if (dto.origin === ComponentOrigin.PURCHASED && dto.supplierId === null) {
       throw new BadRequestException(
         'supplierId ne peut pas être null pour un composant de type PURCHASED.',
       );
     }
-    return this.prisma.component.update({
+
+    const before =
+      dto.stockQty !== undefined
+        ? await this.prisma.component.findUnique({
+            where: { id },
+            select: { stockQty: true },
+          })
+        : null;
+
+    const updated = await this.prisma.component.update({
       where: { id },
       data: {
         ...(dto.ref !== undefined ? { ref: dto.ref } : {}),
@@ -93,6 +122,23 @@ export class ComponentsService {
         ...(dto.costPerUnit !== undefined ? { costPerUnit: dto.costPerUnit } : {}),
       },
     });
+
+    if (userId && dto.stockQty !== undefined) {
+      await this.auditService.log({
+        entityType: 'Component',
+        entityId: id,
+        action: 'STOCK_ADJUSTED',
+        userId,
+        changes: {
+          stockQty: {
+            before: before ? Number(before.stockQty) : undefined,
+            after: Number(updated.stockQty),
+          },
+        },
+      });
+    }
+
+    return updated;
   }
 
   remove(id: string) {

@@ -101,12 +101,14 @@ export class NotificationsService {
         email: string;
         name: string;
         role: string;
+        isAdmin?: boolean;
       }>(raw);
       return {
         sub: payload.sub,
         email: payload.email,
         name: payload.name,
         role: payload.role,
+        isAdmin: payload.isAdmin === true,
       };
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Invalid token';

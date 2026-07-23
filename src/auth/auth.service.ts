@@ -175,6 +175,7 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role,
+      isAdmin: user.isAdmin,
     };
   }
 

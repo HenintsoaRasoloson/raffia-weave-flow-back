@@ -18,6 +18,10 @@ import {
 } from '@nestjs/swagger';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  PRODUCTION_ROLES,
+  RolesAllowed,
+} from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../auth/auth.types';
 import { ListQueryDto } from '../common/dto/list-query.dto';
@@ -72,7 +76,7 @@ export class ProductionOrdersController {
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...PRODUCTION_ROLES)
   @ApiOperation({ summary: 'Créer un ordre de fabrication' })
   @ApiCreatedResponse({ description: 'OF créé', type: ProductionOrderResponseDto })
   create(
@@ -83,7 +87,7 @@ export class ProductionOrdersController {
   }
 
   @Patch(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...PRODUCTION_ROLES)
   @ApiOperation({ summary: 'Mettre à jour un ordre de fabrication' })
   @ApiOkResponse({ description: 'OF mis à jour', type: ProductionOrderResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateProductionOrderDto) {
@@ -91,7 +95,7 @@ export class ProductionOrdersController {
   }
 
   @Patch(':id/stages')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...PRODUCTION_ROLES)
   @ApiOperation({
     summary: 'Planifier / mettre a jour les etapes atelier d un OF',
     description:
@@ -106,7 +110,7 @@ export class ProductionOrdersController {
   }
 
   @Patch(':id/progress')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...PRODUCTION_ROLES)
   @ApiOperation({ summary: 'Mettre à jour l avancement métier d un OF' })
   @ApiOkResponse({
     description: 'Progression OF mise à jour',
@@ -139,8 +143,27 @@ export class ProductionOrdersController {
     return this.productionOrdersService.checkMaterials(id);
   }
 
+  @Post(':id/consume-materials')
+  @RolesAllowed(...PRODUCTION_ROLES)
+  @ApiOperation({
+    summary: 'Consommer les matières BOM (débit stock)',
+    description:
+      'Verrouille les composants (FOR UPDATE), vérifie le stock, décrémente, ' +
+      'et marque materialsConsumedAt (idempotent). Passe l\'OF en IN_PROGRESS si PLANNED.',
+  })
+  @ApiOkResponse({
+    description: 'Matières consommées',
+    type: ProductionOrderResponseDto,
+  })
+  consumeMaterials(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.productionOrdersService.consumeMaterials(id, user.sub);
+  }
+
   @Patch(':id/approve-quality')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...PRODUCTION_ROLES)
   @ApiOperation({
     summary: 'Valider la conformité qualité d\'un OF terminé',
     description:

@@ -22,7 +22,9 @@ describe('ComponentsService', () => {
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'cmp-1' }]),
     } as unknown as PrismaService;
 
-    const service = new ComponentsService(prisma);
+    const service = new ComponentsService(prisma, {
+      log: jest.fn(),
+    } as never);
     const result = await service.findAll({
       page: 1,
       pageSize: 10,

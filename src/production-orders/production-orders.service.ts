@@ -12,6 +12,7 @@ import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
+import { lockComponentsForUpdate } from '../common/stock/stock-lock.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SalesOrdersService } from '../sales-orders/sales-orders.service';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto';
@@ -330,6 +331,7 @@ export class ProductionOrdersService {
       where: { id },
       select: {
         quantity: true,
+        materialsConsumedAt: true,
         product: {
           select: {
             name: true,
@@ -365,9 +367,135 @@ export class ProductionOrdersService {
       productionOrderId: id,
       productName: order.product.name,
       quantity: order.quantity,
+      materialsConsumedAt: order.materialsConsumedAt,
       ready: results.every((r) => r.ok),
       items: results,
     };
+  }
+
+  async consumeMaterials(id: string, userId?: string) {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.productionOrder.findUnique({
+        where: { id },
+        include: {
+          product: {
+            include: {
+              bomItems: true,
+            },
+          },
+        },
+      });
+
+      if (!order) {
+        throw new NotFoundException('Ordre de fabrication introuvable');
+      }
+
+      if (order.status === ProductionStatus.CANCELLED) {
+        throw new BadRequestException(
+          'Impossible de consommer les matieres d un OF annule',
+        );
+      }
+
+      if (order.materialsConsumedAt) {
+        throw new BadRequestException(
+          'Les matieres de cet OF ont deja ete consommees',
+        );
+      }
+
+      if (!order.product.bomItems.length) {
+        throw new BadRequestException(
+          'Aucune nomenclature (BOM) pour consommer le stock',
+        );
+      }
+
+      const requirements = order.product.bomItems.map((bom) => ({
+        componentId: bom.componentId,
+        needed: Number(bom.quantity) * order.quantity,
+      }));
+
+      const locked = await lockComponentsForUpdate(
+        tx,
+        requirements.map((item) => item.componentId),
+      );
+
+      const shortages: Array<{
+        componentId: string;
+        ref: string;
+        name: string;
+        needed: number;
+        available: number;
+      }> = [];
+
+      for (const requirement of requirements) {
+        const row = locked.get(requirement.componentId);
+        if (!row) {
+          throw new BadRequestException(
+            `Composant introuvable (${requirement.componentId})`,
+          );
+        }
+
+        const available = Number(row.stockQty);
+        if (available < requirement.needed) {
+          shortages.push({
+            componentId: row.id,
+            ref: row.ref,
+            name: row.name,
+            needed: requirement.needed,
+            available,
+          });
+        }
+      }
+
+      if (shortages.length > 0) {
+        throw new BadRequestException({
+          message: 'Stock insuffisant pour consommer les matieres',
+          shortages,
+        });
+      }
+
+      for (const requirement of requirements) {
+        await tx.component.update({
+          where: { id: requirement.componentId },
+          data: {
+            stockQty: { decrement: requirement.needed },
+          },
+        });
+      }
+
+      const nextStatus =
+        order.status === ProductionStatus.PLANNED
+          ? ProductionStatus.IN_PROGRESS
+          : order.status;
+
+      return tx.productionOrder.update({
+        where: { id },
+        data: {
+          materialsConsumedAt: new Date(),
+          status: nextStatus,
+        },
+        include: {
+          product: true,
+          variant: true,
+          salesOrder: true,
+          stages: true,
+        },
+      });
+    });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'ProductionOrder',
+        entityId: id,
+        action: 'PRODUCTION_MATERIALS_CONSUMED',
+        userId,
+        changes: {
+          materialsConsumedAt: { after: updated.materialsConsumedAt },
+          status: { after: updated.status },
+        },
+      });
+    }
+
+    return updated;
   }
 
   async getPlanning(query: PlanningQueryDto): Promise<ProductionPlanningResponseDto> {

@@ -236,9 +236,20 @@ enum AuditAction {
   PRODUCTION_ORDER_CREATED
   PRODUCTION_ORDER_PROGRESS_UPDATED
   PRODUCTION_ORDER_QUALITY_APPROVED
+  PRODUCTION_MATERIALS_CONSUMED
   // Achats
   PURCHASE_ORDER_CREATED
   PURCHASE_ORDER_STATUS_CHANGED
+  PURCHASE_ORDER_RECEIVED
+  PURCHASE_ORDER_PAYMENT_RECORDED
+  // Stock
+  STOCK_ADJUSTED
+  // Tresorerie
+  LEDGER_ENTRY_CREATED
+  // Admin
+  USER_CREATED
+  USER_UPDATED
+  COMPANY_SETTINGS_UPDATED
   // Livraisons
   DELIVERY_CREATED
   DELIVERY_MARKED_DELIVERED
@@ -716,6 +727,8 @@ model ProductionOrder {
   status           ProductionStatus  @default(PLANNED)
   // Validation qualité : passe à true après contrôle conformité (avant livraison)
   qualityApproved  Boolean           @default(false)
+  // Consommation BOM (idempotence) : horodatage du débit stock matières
+  materialsConsumedAt DateTime?
   stages           ProductionStep[]
   calendarEvents   CalendarEvent[]
   createdAt        DateTime          @default(now())

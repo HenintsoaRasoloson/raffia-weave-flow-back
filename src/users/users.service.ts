@@ -6,6 +6,7 @@ import {
 import bcrypt from 'bcryptjs';
 import type { Prisma } from '../generated/prisma/client';
 import { UserRole } from '../generated/prisma/client';
+import { AuditService } from '../common/audit.service';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { enumWhere } from '../common/prisma/enum-filter.util';
 import { dateFieldWhere } from '../common/query/date-range.util';
@@ -19,7 +20,10 @@ const USER_SORT_FIELDS = ['createdAt', 'email', 'name'] as const;
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
@@ -81,7 +85,7 @@ export class UsersService {
     return user;
   }
 
-  async create(dto: CreateUserDto) {
+  async create(dto: CreateUserDto, actorUserId?: string) {
     const email = dto.email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
 
@@ -91,7 +95,7 @@ export class UsersService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    return this.prisma.user.create({
+    const created = await this.prisma.user.create({
       data: {
         email,
         name: dto.name?.trim() || null,
@@ -109,10 +113,26 @@ export class UsersService {
         updatedAt: true,
       },
     });
+
+    if (actorUserId) {
+      await this.auditService.log({
+        entityType: 'User',
+        entityId: created.id,
+        action: 'USER_CREATED',
+        userId: actorUserId,
+        changes: {
+          email: { after: created.email },
+          role: { after: created.role },
+          isAdmin: { after: created.isAdmin },
+        },
+      });
+    }
+
+    return created;
   }
 
-  async update(id: string, dto: UpdateUserDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateUserDto, actorUserId?: string) {
+    const before = await this.findOne(id);
 
     if (dto.email) {
       const email = dto.email.trim().toLowerCase();
@@ -125,7 +145,7 @@ export class UsersService {
       }
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id },
       data: {
         ...(dto.email !== undefined
@@ -145,6 +165,22 @@ export class UsersService {
         updatedAt: true,
       },
     });
+
+    if (actorUserId) {
+      await this.auditService.log({
+        entityType: 'User',
+        entityId: id,
+        action: 'USER_UPDATED',
+        userId: actorUserId,
+        changes: {
+          email: { before: before.email, after: updated.email },
+          role: { before: before.role, after: updated.role },
+          isAdmin: { before: before.isAdmin, after: updated.isAdmin },
+        },
+      });
+    }
+
+    return updated;
   }
 
   async remove(id: string) {

@@ -10,6 +10,7 @@ import {
   decimalToNumber,
   normalizeCurrency,
 } from '../common/currency/currency.util';
+import { AuditService } from '../common/audit.service';
 import type { CompanyLogo, CompanyLogoKind } from '../generated/prisma/client';
 import { decompressBufferIfNeeded } from '../ged/compression.util';
 import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
@@ -58,6 +59,7 @@ export class CompanySettingsService {
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
     private readonly gedPathsService: GedPathsService,
+    private readonly auditService: AuditService,
   ) {}
 
   async getSettings(): Promise<CompanySettingsResponseDto> {
@@ -70,6 +72,7 @@ export class CompanySettingsService {
 
   async updateSettings(
     dto: UpdateCompanySettingsDto,
+    userId?: string,
   ): Promise<CompanySettingsResponseDto> {
     const current = await this.ensureSettings();
 
@@ -101,6 +104,16 @@ export class CompanySettingsService {
       },
       include: { logos: true },
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'CompanySetting',
+        entityId: updated.id,
+        action: 'COMPANY_SETTINGS_UPDATED',
+        userId,
+        changes: { ...(dto as object) },
+      });
+    }
 
     return this.toSettingsResponse(updated, updated.logos);
   }

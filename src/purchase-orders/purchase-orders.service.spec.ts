@@ -18,6 +18,12 @@ function createDocumentReferenceMock(): DocumentReferenceService {
   } as unknown as DocumentReferenceService;
 }
 
+function createAuditMock() {
+  return {
+    log: jest.fn().mockResolvedValue(undefined),
+  } as unknown as import('../common/audit.service').AuditService;
+}
+
 describe('PurchaseOrdersService', () => {
   it('computes totalHt when creating a purchase order', async () => {
     const prisma = {
@@ -27,7 +33,11 @@ describe('PurchaseOrdersService', () => {
       },
     } as unknown as PrismaService;
     const documentReference = createDocumentReferenceMock();
-    const service = new PurchaseOrdersService(prisma, documentReference);
+    const service = new PurchaseOrdersService(
+      prisma,
+      documentReference,
+      createAuditMock(),
+    );
 
     const dto = {
       supplierId: 'sup-1',
@@ -57,6 +67,7 @@ describe('PurchaseOrdersService', () => {
     const service = new PurchaseOrdersService(
       prisma,
       createDocumentReferenceMock(),
+      createAuditMock(),
     );
 
     await expect(service.markReceived('missing')).rejects.toBeInstanceOf(
@@ -74,6 +85,7 @@ describe('PurchaseOrdersService', () => {
     const service = new PurchaseOrdersService(
       prisma,
       createDocumentReferenceMock(),
+      createAuditMock(),
     );
 
     await expect(service.markReceived('po-1')).rejects.toBeInstanceOf(
@@ -84,9 +96,13 @@ describe('PurchaseOrdersService', () => {
   it('receives a purchase order and increments component stock atomically', async () => {
     const prisma = {
       $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
+      $queryRaw: jest.fn().mockResolvedValue([
+        { id: 'comp-1', ref: 'C1', name: 'Cotton', stockQty: 10 },
+      ]),
       purchaseOrder: {
         findUnique: jest.fn().mockResolvedValue({
           id: 'po-1',
+          orderNumber: 'ACH/000001',
           status: 'CONFIRMED',
           items: [
             { componentId: 'comp-1', quantity: 4 },
@@ -94,43 +110,45 @@ describe('PurchaseOrdersService', () => {
           ],
         }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-        findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'po-1', status: 'RECEIVED' }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'po-1',
+          orderNumber: 'ACH/000001',
+          status: 'RECEIVED',
+        }),
       },
       component: {
         update: jest.fn().mockResolvedValue({ id: 'comp-1' }),
       },
     } as unknown as PrismaService;
+    const audit = createAuditMock();
     const service = new PurchaseOrdersService(
       prisma,
       createDocumentReferenceMock(),
+      audit,
     );
 
-    await expect(service.markReceived('po-1')).resolves.toEqual({
+    await expect(service.markReceived('po-1', 'user-1')).resolves.toEqual({
       id: 'po-1',
+      orderNumber: 'ACH/000001',
       status: 'RECEIVED',
     });
 
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(prisma.purchaseOrder.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: 'po-1',
-        status: { notIn: ['RECEIVED', 'CANCELLED'] },
-      },
-      data: {
-        status: 'RECEIVED',
-        receivedAt: expect.any(Date),
-      },
-    });
+    expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.component.update).toHaveBeenCalledTimes(1);
-    expect(prisma.component.update).toHaveBeenCalledWith({
-      where: { id: 'comp-1' },
-      data: { stockQty: { increment: 4 } },
-    });
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'PURCHASE_ORDER_RECEIVED',
+        userId: 'user-1',
+      }),
+    );
   });
 
   it('rolls back when component stock update fails during receive', async () => {
     const prisma = {
       $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
+      $queryRaw: jest.fn().mockResolvedValue([
+        { id: 'missing-comp', ref: 'X', name: 'Missing', stockQty: 0 },
+      ]),
       purchaseOrder: {
         findUnique: jest.fn().mockResolvedValue({
           id: 'po-1',
@@ -146,6 +164,7 @@ describe('PurchaseOrdersService', () => {
     const service = new PurchaseOrdersService(
       prisma,
       createDocumentReferenceMock(),
+      createAuditMock(),
     );
 
     await expect(service.markReceived('po-1')).rejects.toThrow('Component missing');

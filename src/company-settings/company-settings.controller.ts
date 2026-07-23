@@ -83,8 +83,11 @@ export class CompanySettingsController {
     description: 'Parametres societe mis a jour',
     type: CompanySettingsResponseDto,
   })
-  updateSettings(@Body() dto: UpdateCompanySettingsDto) {
-    return this.companySettingsService.updateSettings(dto);
+  updateSettings(
+    @Body() dto: UpdateCompanySettingsDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.companySettingsService.updateSettings(dto, user.sub);
   }
 
   @Post('logos/:kind')

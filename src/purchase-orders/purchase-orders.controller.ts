@@ -2,6 +2,12 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  RolesAllowed,
+  STOCK_FINANCE_ROLES,
+} from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { JwtAccessPayload } from '../auth/auth.types';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
@@ -32,7 +38,7 @@ export class PurchaseOrdersController {
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Créer un bon de commande' })
   @ApiCreatedResponse({ type: PurchaseOrderResponseDto })
   create(@Body() dto: CreatePurchaseOrderDto) {
@@ -40,7 +46,7 @@ export class PurchaseOrdersController {
   }
 
   @Patch(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Mettre à jour un bon de commande' })
   @ApiOkResponse({ type: PurchaseOrderResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdatePurchaseOrderDto) {
@@ -48,15 +54,18 @@ export class PurchaseOrdersController {
   }
 
   @Patch(':id/mark-received')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Marquer un bon de commande comme reçu' })
   @ApiOkResponse({ type: PurchaseOrderResponseDto })
-  markReceived(@Param('id') id: string) {
-    return this.purchaseOrdersService.markReceived(id);
+  markReceived(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.purchaseOrdersService.markReceived(id, user.sub);
   }
 
   @Post(':id/record-payment')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({
     summary: 'Enregistrer un paiement fournisseur',
     description:
@@ -66,8 +75,9 @@ export class PurchaseOrdersController {
   recordPayment(
     @Param('id') id: string,
     @Body() dto: RecordPurchaseOrderPaymentDto,
+    @CurrentUser() user: JwtAccessPayload,
   ) {
-    return this.purchaseOrdersService.recordPayment(id, dto);
+    return this.purchaseOrdersService.recordPayment(id, dto, user.sub);
   }
 
   @Delete(':id')

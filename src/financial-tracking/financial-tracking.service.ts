@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { AuditService } from '../common/audit.service';
 import { buildFrenchTableTextWhere } from '../common/query/search.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BudgetAlertQueryDto } from './dto/budget-alert-query.dto';
@@ -68,6 +69,7 @@ export class FinancialTrackingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly auditService: AuditService,
   ) {}
 
   async listLedgerCategories() {
@@ -692,8 +694,8 @@ export class FinancialTrackingService {
     };
   }
 
-  async createLedgerEntry(dto: CreateLedgerEntryDto) {
-    return this.prisma.ledgerEntry.create({
+  async createLedgerEntry(dto: CreateLedgerEntryDto, userId?: string) {
+    const entry = await this.prisma.ledgerEntry.create({
       data: {
         entryDate: new Date(dto.entryDate),
         label: dto.label.trim(),
@@ -716,10 +718,26 @@ export class FinancialTrackingService {
         salesOrder: { select: { id: true, orderNumber: true } },
         purchaseOrder: { select: { id: true, orderNumber: true } },
       },
-    }).then((entry) => ({
+    });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'LedgerEntry',
+        entityId: entry.id,
+        action: 'LEDGER_ENTRY_CREATED',
+        userId,
+        details: `Manual ledger entry ${entry.entryType} ${entry.label}`,
+        changes: {
+          amount: { after: this.round2(entry.amount) },
+          entryType: { after: entry.entryType },
+        },
+      });
+    }
+
+    return {
       ...entry,
       amount: this.round2(entry.amount),
-    }));
+    };
   }
 
   async getClientSummary(clientId: string, query: FinancialOverviewQueryDto) {

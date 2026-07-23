@@ -8,6 +8,8 @@ import { enumWhere } from '../common/prisma/enum-filter.util';
 import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { resolveOrderBy } from '../common/query/sort.util';
+import { AuditService } from '../common/audit.service';
+import { lockComponentsForUpdate } from '../common/stock/stock-lock.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
@@ -28,6 +30,7 @@ export class PurchaseOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly documentReferenceService: DocumentReferenceService,
+    private readonly auditService: AuditService,
   ) {}
 
   async findAll(query: ListQueryDto) {
@@ -160,8 +163,8 @@ export class PurchaseOrdersService {
     });
   }
 
-  async markReceived(id: string) {
-    return this.prisma.$transaction(async (tx) => {
+  async markReceived(id: string, userId?: string) {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const purchaseOrder = await tx.purchaseOrder.findUnique({
         where: { id },
         include: { items: true },
@@ -201,13 +204,22 @@ export class PurchaseOrdersService {
         throw new BadRequestException('Le bon de commande est deja recu');
       }
 
-      for (const item of purchaseOrder.items) {
-        if (!item.componentId) {
-          continue;
+      const stockItems = purchaseOrder.items.filter((item) => item.componentId);
+      const locked = await lockComponentsForUpdate(
+        tx,
+        stockItems.map((item) => item.componentId as string),
+      );
+
+      for (const item of stockItems) {
+        const componentId = item.componentId as string;
+        if (!locked.has(componentId)) {
+          throw new BadRequestException(
+            `Composant introuvable pour la ligne de reception (${componentId})`,
+          );
         }
 
         await tx.component.update({
-          where: { id: item.componentId },
+          where: { id: componentId },
           data: {
             stockQty: { increment: item.quantity },
           },
@@ -219,9 +231,28 @@ export class PurchaseOrdersService {
         include: { supplier: true, items: true, payments: true },
       });
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'PurchaseOrder',
+        entityId: id,
+        action: 'PURCHASE_ORDER_RECEIVED',
+        userId,
+        changes: {
+          status: { before: 'PREVIOUS', after: PurchaseOrderStatus.RECEIVED },
+        },
+        details: `Reception BC ${updated.orderNumber}`,
+      });
+    }
+
+    return updated;
   }
 
-  async recordPayment(id: string, dto: RecordPurchaseOrderPaymentDto) {
+  async recordPayment(
+    id: string,
+    dto: RecordPurchaseOrderPaymentDto,
+    userId?: string,
+  ) {
     const purchaseOrder = await this.prisma.purchaseOrder.findUnique({
       where: { id },
       select: {
@@ -257,7 +288,7 @@ export class PurchaseOrdersService {
 
     const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date();
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const category = await tx.ledgerCategory.upsert({
         where: { code: 'SUPPLIER_PAYMENT' },
         update: {
@@ -310,6 +341,21 @@ export class PurchaseOrdersService {
         include: { supplier: true, items: true, payments: true },
       });
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'PurchaseOrder',
+        entityId: id,
+        action: 'PURCHASE_ORDER_PAYMENT_RECORDED',
+        userId,
+        changes: {
+          paidAmount: { before: alreadyPaid, after: newPaidAmount },
+          amount: { after: dto.amount },
+        },
+      });
+    }
+
+    return updated;
   }
 
   remove(id: string) {

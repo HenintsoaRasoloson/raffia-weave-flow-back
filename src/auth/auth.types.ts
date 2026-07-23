@@ -3,6 +3,7 @@ export type JwtAccessPayload = {
   email: string;
   name?: string | null;
   role: string;
+  isAdmin: boolean;
 };
 
 export type PublicUser = {

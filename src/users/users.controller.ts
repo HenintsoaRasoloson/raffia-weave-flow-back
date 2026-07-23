@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -47,15 +48,22 @@ export class UsersController {
   @Post()
   @ApiOperation({ summary: 'Creer un utilisateur' })
   @ApiCreatedResponse({ description: 'Utilisateur cree' })
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
+  create(
+    @Body() dto: CreateUserDto,
+    @CurrentUser() user: { sub: string },
+  ) {
+    return this.usersService.create(dto, user.sub);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Mettre a jour un utilisateur' })
   @ApiOkResponse({ description: 'Utilisateur mis a jour' })
-  update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
-    return this.usersService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDto,
+    @CurrentUser() user: { sub: string },
+  ) {
+    return this.usersService.update(id, dto, user.sub);
   }
 
   @Delete(':id')

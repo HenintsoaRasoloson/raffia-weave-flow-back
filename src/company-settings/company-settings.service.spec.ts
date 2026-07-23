@@ -64,6 +64,7 @@ describe('CompanySettingsService', () => {
       {} as PrismaService,
       minio,
       gedPaths,
+      { log: jest.fn() } as never,
     );
     expect(() => service.parseLogoKind('favicon')).toThrow(BadRequestException);
     expect(service.parseLogoKind('INVOICE')).toBe('invoice');
@@ -79,7 +80,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minio, gedPaths);
+    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never);
     const result = await service.getSettings();
 
     expect(result.logoSlots).toHaveLength(4);
@@ -99,7 +100,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minio, gedPaths);
+    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never);
     const result = await service.convertCurrency({
       amount: 10000,
       from: 'MGA',
@@ -137,7 +138,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minio, gedPaths);
+    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never);
     const result = await service.getSettings();
     const invoiceSlot = result.logoSlots.find((s) => s.kind === 'invoice');
 
@@ -187,7 +188,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minioEnabled, gedPaths);
+    const service = new CompanySettingsService(prisma, minioEnabled, gedPaths, { log: jest.fn() } as never);
     const result = await service.getSettings();
     const primarySlot = result.logoSlots.find((s) => s.kind === 'primary');
 
@@ -212,7 +213,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minio, gedPaths);
+    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never);
     await expect(service.deleteLogo('email')).rejects.toThrow(NotFoundException);
   });
 
@@ -234,7 +235,7 @@ describe('CompanySettingsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new CompanySettingsService(prisma, minio, gedPaths);
+    const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never);
     const file = {
       originalname: 'logo.png',
       mimetype: 'image/png',

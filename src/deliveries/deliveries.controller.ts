@@ -2,6 +2,10 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  DELIVERY_ROLES,
+  RolesAllowed,
+} from '../auth/decorators/roles.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
@@ -31,7 +35,7 @@ export class DeliveriesController {
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...DELIVERY_ROLES)
   @ApiOperation({ summary: 'Créer une livraison' })
   @ApiCreatedResponse({ description: 'Livraison créée', type: DeliveryResponseDto })
   create(@Body() dto: CreateDeliveryDto) {
@@ -39,7 +43,7 @@ export class DeliveriesController {
   }
 
   @Patch(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...DELIVERY_ROLES)
   @ApiOperation({ summary: 'Mettre à jour une livraison' })
   @ApiOkResponse({ description: 'Livraison mise à jour', type: DeliveryResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateDeliveryDto) {
@@ -47,7 +51,7 @@ export class DeliveriesController {
   }
 
   @Patch(':id/mark-delivered')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...DELIVERY_ROLES)
   @ApiOperation({ summary: 'Marquer une livraison comme livrée' })
   @ApiOkResponse({
     description: 'Livraison marquée livrée',

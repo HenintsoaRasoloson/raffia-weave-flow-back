@@ -7,8 +7,13 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  RolesAllowed,
+  STOCK_FINANCE_ROLES,
+} from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { JwtAccessPayload } from '../auth/auth.types';
 import { BudgetAlertQueryDto } from './dto/budget-alert-query.dto';
 import { CreateFinancialBudgetDto } from './dto/create-financial-budget.dto';
 import { CreateLedgerCategoryDto } from './dto/create-ledger-category.dto';
@@ -54,7 +59,7 @@ export class FinancialTrackingController {
   }
 
   @Post('categories')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Creer une categorie de suivi financier' })
   @ApiCreatedResponse({ description: 'Categorie financiere creee' })
   createLedgerCategory(@Body() dto: CreateLedgerCategoryDto) {
@@ -80,7 +85,7 @@ export class FinancialTrackingController {
   }
 
   @Post('overdue-reminders/notify')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({
     summary: 'Notifier les impayes au responsable financier',
     description:
@@ -103,7 +108,7 @@ export class FinancialTrackingController {
   }
 
   @Post('budget-alerts/notify')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({
     summary: 'Notifier les depassements budgetaires',
     description:
@@ -115,7 +120,7 @@ export class FinancialTrackingController {
   }
 
   @Post('budgets')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Creer un budget de suivi financier' })
   @ApiCreatedResponse({ description: 'Budget financier cree' })
   createBudget(@Body() dto: CreateFinancialBudgetDto) {
@@ -123,15 +128,18 @@ export class FinancialTrackingController {
   }
 
   @Post('ledger-entries')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({
     summary: 'Creer une ecriture manuelle de suivi financier',
     description:
       'Permet de saisir depenses, charges, salaires, virements internes ou ajustements de tresorerie.',
   })
   @ApiCreatedResponse({ description: 'Ecriture de tresorerie creee' })
-  createLedgerEntry(@Body() dto: CreateLedgerEntryDto) {
-    return this.financialTrackingService.createLedgerEntry(dto);
+  createLedgerEntry(
+    @Body() dto: CreateLedgerEntryDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.financialTrackingService.createLedgerEntry(dto, user.sub);
   }
 
   @Get('clients/:clientId')

@@ -17,6 +17,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: JwtAccessPayload) {
-    return payload;
+    return {
+      ...payload,
+      isAdmin: payload.isAdmin === true,
+    };
   }
 }
