@@ -19,6 +19,10 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  RolesAllowed,
+  SALES_ROLES,
+} from '../auth/decorators/roles.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CatalogSharesService } from './catalog-shares.service';
@@ -64,7 +68,8 @@ export class CatalogSharesController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Créer un catalogue partagé' })
   @ApiCreatedResponse({ type: CatalogShareResponseDto })
@@ -73,7 +78,8 @@ export class CatalogSharesController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Mettre à jour un catalogue partagé' })
   @ApiOkResponse({ type: CatalogShareResponseDto })
@@ -85,7 +91,8 @@ export class CatalogSharesController {
   }
 
   @Patch(':id/products')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Remplacer les produits du catalogue partagé' })
   @ApiOkResponse({ type: CatalogShareResponseDto })
@@ -97,7 +104,8 @@ export class CatalogSharesController {
   }
 
   @Delete(':id/products/:productId')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Retirer un produit du catalogue partagé' })
   removeProduct(

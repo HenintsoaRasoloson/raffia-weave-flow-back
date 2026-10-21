@@ -32,6 +32,10 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  RolesAllowed,
+  STOCK_FINANCE_ROLES,
+} from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../auth/auth.types';
 import { ListQueryDto } from '../common/dto/list-query.dto';
@@ -216,7 +220,7 @@ export class InvoicesController {
   }
 
   @Post(':id/documents')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -282,7 +286,7 @@ export class InvoicesController {
   }
 
   @Post(':id/documents/:documentId/replace')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -324,7 +328,7 @@ export class InvoicesController {
   }
 
   @Delete(':id/documents/:documentId')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Supprimer un document facture' })
   @ApiOkResponse({ description: 'Document facture supprimé' })
   deleteDocument(
@@ -335,7 +339,7 @@ export class InvoicesController {
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Créer une facture' })
   @ApiCreatedResponse({ description: 'Facture créée', type: InvoiceResponseDto })
   create(
@@ -346,7 +350,7 @@ export class InvoicesController {
   }
 
   @Patch(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Mettre à jour une facture' })
   @ApiOkResponse({ description: 'Facture mise à jour', type: InvoiceResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateInvoiceDto) {
@@ -354,7 +358,7 @@ export class InvoicesController {
   }
 
   @Patch(':id/mark-paid')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Marquer une facture comme intégralement payée (raccourci)' })
   @ApiOkResponse({
     description: 'Facture marquée payée',
@@ -368,7 +372,7 @@ export class InvoicesController {
   }
 
   @Post(':id/record-payment')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({
     summary: 'Enregistrer un paiement (acompte ou solde)',
     description:

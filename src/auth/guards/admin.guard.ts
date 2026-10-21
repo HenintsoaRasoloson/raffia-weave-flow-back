@@ -14,13 +14,17 @@ export class AdminGuard implements CanActivate {
     const user = request.user as JwtAccessPayload | undefined;
 
     if (!user?.sub) {
-      throw new ForbiddenException('Admin access required.');
+      throw new ForbiddenException(
+        'Droits administrateur requis (gérant).',
+      );
     }
 
     if (user.isAdmin || user.role === UserRole.GERANT) {
       return true;
     }
 
-    throw new ForbiddenException('Admin access required.');
+    throw new ForbiddenException(
+      'Droits administrateur requis (gérant).',
+    );
   }
 }

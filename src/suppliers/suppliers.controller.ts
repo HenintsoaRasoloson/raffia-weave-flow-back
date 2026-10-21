@@ -2,6 +2,10 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  RolesAllowed,
+  STOCK_FINANCE_ROLES,
+} from '../auth/decorators/roles.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
@@ -31,7 +35,7 @@ export class SuppliersController {
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Créer un fournisseur' })
   @ApiCreatedResponse({ type: SupplierResponseDto })
   create(@Body() dto: CreateSupplierDto) {
@@ -39,7 +43,7 @@ export class SuppliersController {
   }
 
   @Patch(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...STOCK_FINANCE_ROLES)
   @ApiOperation({ summary: 'Mettre à jour un fournisseur' })
   @ApiOkResponse({ type: SupplierResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateSupplierDto) {

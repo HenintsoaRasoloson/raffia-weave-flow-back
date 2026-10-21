@@ -30,3 +30,13 @@ export const DELIVERY_ROLES: UserRole[] = [
   ...MANAGEMENT_ROLES,
   UserRole.RESPONSABLE_LIVRAISON,
 ];
+
+export const SALES_ROLES: UserRole[] = [...MANAGEMENT_ROLES];
+
+export const CATALOG_ROLES: UserRole[] = [...PRODUCTION_ROLES];
+
+export const COMPONENT_ROLES: UserRole[] = [
+  ...MANAGEMENT_ROLES,
+  UserRole.RESPONSABLE_PRODUCTION,
+  UserRole.RESPONSABLE_FINANCIER_STOCKS,
+];

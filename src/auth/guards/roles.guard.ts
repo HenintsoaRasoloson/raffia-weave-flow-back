@@ -27,7 +27,7 @@ export class RolesGuard implements CanActivate {
     const user = request.user as JwtAccessPayload | undefined;
 
     if (!user?.sub) {
-      throw new ForbiddenException('Authenticated access required.');
+      throw new ForbiddenException('Connexion requise.');
     }
 
     if (user.isAdmin) {
@@ -38,6 +38,8 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    throw new ForbiddenException('Insufficient role for this action.');
+    throw new ForbiddenException(
+      'Votre rôle ne permet pas cette action. Demandez au gérant.',
+    );
   }
 }

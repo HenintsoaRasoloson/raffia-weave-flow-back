@@ -3,8 +3,8 @@ import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
+  COMPONENT_ROLES,
   RolesAllowed,
-  STOCK_FINANCE_ROLES,
 } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/auth.types';
@@ -37,7 +37,7 @@ export class ComponentsController {
   }
 
   @Post()
-  @RolesAllowed(...STOCK_FINANCE_ROLES)
+  @RolesAllowed(...COMPONENT_ROLES)
   @ApiOperation({ summary: 'Créer un composant' })
   @ApiCreatedResponse({ type: ComponentResponseDto })
   create(
@@ -48,7 +48,7 @@ export class ComponentsController {
   }
 
   @Patch(':id')
-  @RolesAllowed(...STOCK_FINANCE_ROLES)
+  @RolesAllowed(...COMPONENT_ROLES)
   @ApiOperation({ summary: 'Mettre à jour un composant' })
   @ApiOkResponse({ type: ComponentResponseDto })
   update(

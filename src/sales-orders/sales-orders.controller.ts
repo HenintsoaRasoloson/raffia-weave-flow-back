@@ -25,8 +25,11 @@ import {
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  RolesAllowed,
+  SALES_ROLES,
+} from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../auth/auth.types';
 import { ListQueryDto } from '../common/dto/list-query.dto';
@@ -67,7 +70,7 @@ export class SalesOrdersController {
   }
 
   @Post(':id/bat-documents')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -129,7 +132,7 @@ export class SalesOrdersController {
   }
 
   @Post(':id/bat-documents/:documentId/replace')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -171,7 +174,7 @@ export class SalesOrdersController {
   }
 
   @Delete(':id/bat-documents/:documentId')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Supprimer un document BAT' })
   @ApiOkResponse({ description: 'Document BAT supprimé' })
   deleteBatDocument(
@@ -182,7 +185,7 @@ export class SalesOrdersController {
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Créer une commande' })
   @ApiCreatedResponse({ description: 'Commande créée', type: SalesOrderResponseDto })
   create(
@@ -193,7 +196,7 @@ export class SalesOrdersController {
   }
 
   @Patch(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Mettre à jour une commande' })
   @ApiOkResponse({ description: 'Commande mise à jour', type: SalesOrderResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateSalesOrderDto) {
@@ -201,7 +204,7 @@ export class SalesOrdersController {
   }
 
   @Patch(':id/status')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Transition métier du statut commande' })
   @ApiOkResponse({
     description: 'Statut commande mis à jour',
@@ -216,7 +219,7 @@ export class SalesOrdersController {
   }
 
   @Patch(':id/bat-send')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({
     summary: 'Marquer le BAT comme envoyé au client',
     description:
@@ -232,7 +235,7 @@ export class SalesOrdersController {
   }
 
   @Patch(':id/bat-approve')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({
     summary: 'Enregistrer l\'approbation du BAT par le client',
     description:
@@ -248,7 +251,7 @@ export class SalesOrdersController {
   }
 
   @Delete(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Supprimer une commande' })
   @ApiOkResponse({ description: 'Commande supprimée' })
   remove(@Param('id') id: string) {

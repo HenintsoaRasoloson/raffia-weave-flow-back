@@ -30,6 +30,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../auth/auth.types';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  CATALOG_ROLES,
+  RolesAllowed,
+} from '../auth/decorators/roles.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -77,7 +81,7 @@ export class ProductsController {
   }
 
   @Post(':id/technical-sheet')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({
     summary: 'Créer ou mettre à jour la fiche technique (recette détaillée) du produit',
   })
@@ -101,7 +105,7 @@ export class ProductsController {
   }
 
   @Post(':id/images')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...CATALOG_ROLES)
   @UseInterceptors(
     FilesInterceptor('files', 10, {
       storage: memoryStorage(),
@@ -155,7 +159,7 @@ export class ProductsController {
   }
 
   @Post(':id/images/:imageId/replace')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...CATALOG_ROLES)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -191,7 +195,7 @@ export class ProductsController {
   }
 
   @Delete(':id/images/:imageId')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Supprimer une image produit' })
   @ApiOkResponse({
     description: 'Image supprimée',
@@ -205,7 +209,7 @@ export class ProductsController {
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Créer un produit' })
   @ApiCreatedResponse({ description: 'Produit créé', type: ProductResponseDto })
   create(@Body() dto: CreateProductDto) {
@@ -213,7 +217,7 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Mettre à jour un produit' })
   @ApiOkResponse({ description: 'Produit mis à jour', type: ProductResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateProductDto) {

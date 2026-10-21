@@ -1,7 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  CATALOG_ROLES,
+  RolesAllowed,
+} from '../auth/decorators/roles.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { BomItemsService } from './bom-items.service';
@@ -31,7 +34,7 @@ export class BomItemsController {
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Créer un item BOM' })
   @ApiCreatedResponse({ type: BomItemResponseDto })
   create(@Body() dto: CreateBomItemDto) {
@@ -39,7 +42,7 @@ export class BomItemsController {
   }
 
   @Patch(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Mettre à jour un item BOM' })
   @ApiOkResponse({ type: BomItemResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateBomItemDto) {
@@ -47,7 +50,7 @@ export class BomItemsController {
   }
 
   @Delete(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Supprimer un item BOM' })
   remove(@Param('id') id: string) {
     return this.bomItemsService.remove(id);

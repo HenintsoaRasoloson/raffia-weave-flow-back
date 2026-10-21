@@ -186,6 +186,7 @@ export class DeliveriesService {
     }
 
     const allowedSourceStatuses: DeliveryStatus[] = [
+      DeliveryStatus.PLANNED,
       DeliveryStatus.PREPARING,
       DeliveryStatus.IN_TRANSIT,
     ];

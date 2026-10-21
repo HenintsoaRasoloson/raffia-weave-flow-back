@@ -28,8 +28,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../auth/auth.types';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  RolesAllowed,
+  SALES_ROLES,
+} from '../auth/decorators/roles.decorator';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { ApiPaginatedResponse } from '../common/swagger/api-paginated-response.decorator';
 import { ClientsService } from './clients.service';
@@ -97,7 +100,7 @@ export class ClientsController {
   }
 
   @Put(':id/prices')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({
     summary: 'Creer / mettre a jour des accords tarifaires B2B par variante',
   })
@@ -113,7 +116,7 @@ export class ClientsController {
   }
 
   @Delete(':id/prices/:priceId')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Supprimer un accord tarifaire' })
   @ApiOkResponse({ description: 'Accord tarifaire supprime' })
   removeVariantPrice(
@@ -124,7 +127,7 @@ export class ClientsController {
   }
 
   @Post(':id/fiscal-cards')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -172,7 +175,7 @@ export class ClientsController {
   }
 
   @Post(':id/fiscal-cards/:cardId/replace')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -212,7 +215,7 @@ export class ClientsController {
   }
 
   @Delete(':id/fiscal-cards/:cardId')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Supprimer une carte fiscale' })
   @ApiOkResponse({ description: 'Carte fiscale supprimée' })
   deleteFiscalCard(
@@ -223,7 +226,7 @@ export class ClientsController {
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Créer un client' })
   @ApiCreatedResponse({ description: 'Client créé', type: ClientResponseDto })
   create(@Body() dto: CreateClientDto) {
@@ -231,7 +234,7 @@ export class ClientsController {
   }
 
   @Patch(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Mettre à jour un client' })
   @ApiOkResponse({ description: 'Client mis à jour', type: ClientResponseDto })
   update(@Param('id') id: string, @Body() dto: UpdateClientDto) {
@@ -239,7 +242,7 @@ export class ClientsController {
   }
 
   @Delete(':id')
-  @UseGuards(AdminGuard)
+  @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Supprimer un client' })
   @ApiOkResponse({ description: 'Client supprimé' })
   remove(@Param('id') id: string) {
