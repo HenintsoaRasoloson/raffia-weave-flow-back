@@ -32,12 +32,22 @@ export type CatalogShareWithPublicProducts = Prisma.CatalogShareGetPayload<{
         product: {
           include: {
             category: true;
+            productImages: true;
           };
         };
       };
     };
   };
 }>;
+
+export type PublicCatalogShareProduct = {
+  id: string;
+  productId: string;
+  productRef: string;
+  productName: string;
+  productBasePrice: string;
+  imageId: string | null;
+};
 
 const CATALOG_SHARE_SORT_FIELDS = ['createdAt', 'title', 'expiresAt', 'viewCount'] as const;
 
@@ -204,14 +214,25 @@ export class CatalogSharesService {
     return { message: 'Catalog share deleted.' };
   }
 
-  async getPublicByToken(token: string): Promise<CatalogShareWithPublicProducts> {
+  async getPublicByToken(token: string) {
     const share = await this.prisma.catalogShare.findUnique({
       where: { token },
       include: {
         client: true,
         products: {
           where: { product: { ownership: 'COMPANY' } },
-          include: { product: { include: { category: true } } },
+          include: {
+            product: {
+              include: {
+                category: true,
+                productImages: {
+                  orderBy: { createdAt: 'desc' },
+                  take: 1,
+                  select: { id: true },
+                },
+              },
+            },
+          },
         },
       },
     });
@@ -245,6 +266,45 @@ export class CatalogSharesService {
       },
     });
 
-    return share;
+    return {
+      ...share,
+      products: share.products.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        productRef: item.product.ref,
+        productName: item.product.name,
+        productBasePrice: String(item.product.basePrice),
+        imageId: item.product.productImages[0]?.id ?? null,
+      })),
+    };
+  }
+
+  async getPublicProductImage(token: string, productId: string, imageId: string) {
+    const share = await this.prisma.catalogShare.findUnique({
+      where: { token },
+      select: {
+        status: true,
+        expiresAt: true,
+        products: {
+          where: { productId, product: { ownership: 'COMPANY' } },
+          select: { productId: true },
+        },
+      },
+    });
+
+    if (!share) {
+      throw new NotFoundException('Catalog share not found.');
+    }
+    if (share.status !== CatalogShareStatus.ACTIVE) {
+      throw new BadRequestException('Catalog share is not active.');
+    }
+    if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('Catalog share has expired.');
+    }
+    if (share.products.length === 0) {
+      throw new NotFoundException('Produit absent de ce catalogue.');
+    }
+
+    return this.productsService.getImageBinary(productId, imageId);
   }
 }

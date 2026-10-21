@@ -237,6 +237,7 @@ export class DashboardService {
 
     return orders.map((order) => ({
       id: order.id,
+      orderNumber: order.orderNumber,
       product: order.product.name,
       qty: order.quantity,
       status: PRODUCTION_STATUS_LABELS[String(order.status)] ?? 'En cours',
@@ -260,7 +261,8 @@ export class DashboardService {
     });
 
     return orders.map((order) => ({
-      id: order.orderNumber,
+      id: order.id,
+      orderNumber: order.orderNumber,
       client: order.client?.name ?? 'Client inconnu',
       type: order.orderType,
       date: order.orderDate.toLocaleDateString('fr-FR'),
@@ -284,11 +286,12 @@ export class DashboardService {
 
     if (behindOrders.length > 0) {
       alerts.push({
-        id: 'behind-1',
+        id: behindOrders[0].id,
         type: 'warning',
         icon: 'AlertTriangle',
         title: 'Production derrière planning',
         message: `${behindOrders[0].orderNumber} dépasse la date prévue`,
+        actionUrl: `/production/${behindOrders[0].id}`,
       });
     }
 
@@ -298,16 +301,17 @@ export class DashboardService {
       },
       orderBy: { stockQty: 'asc' },
       take: 1,
-      select: { name: true, stockQty: true },
+      select: { id: true, name: true, stockQty: true },
     });
 
     if (lowStockComponents.length > 0) {
       alerts.push({
-        id: 'stock-1',
+        id: lowStockComponents[0].id,
         type: 'info',
         icon: 'Sparkles',
         title: 'Stock bas',
         message: `Réassortir ${lowStockComponents[0].name} — stock actuel: ${Number(lowStockComponents[0].stockQty)}.`,
+        actionUrl: '/composants',
       });
     }
 
@@ -329,6 +333,7 @@ export class DashboardService {
         icon: 'TrendingUp',
         title: 'Rythme actuel',
         message: `CA mensuel: €${(thisMonthCA / 1000).toFixed(1)}k`,
+        actionUrl: '/ventes',
       });
     }
 

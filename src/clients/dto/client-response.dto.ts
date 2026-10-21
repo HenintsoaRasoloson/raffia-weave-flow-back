@@ -30,4 +30,19 @@ export class ClientResponseDto {
 
   @ApiPropertyOptional({ example: '12345 11 2020 0 12345' })
   stat?: string;
+
+  @ApiPropertyOptional({ example: '89421800300012' })
+  siret?: string;
+
+  @ApiPropertyOptional({ example: 'Lot II M 45 Bis' })
+  addressLine?: string;
+
+  @ApiPropertyOptional({ example: 'Antananarivo' })
+  city?: string;
+
+  @ApiPropertyOptional({ example: '101' })
+  postalCode?: string;
+
+  @ApiPropertyOptional({ example: 'Madagascar' })
+  country?: string;
 }

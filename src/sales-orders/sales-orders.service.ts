@@ -75,8 +75,8 @@ export class SalesOrdersService {
     });
   }
 
-  findOne(id: string) {
-    return this.prisma.salesOrder.findUnique({
+  async findOne(id: string) {
+    const order = await this.prisma.salesOrder.findUnique({
       where: { id },
       include: {
         client: true,
@@ -87,6 +87,10 @@ export class SalesOrdersService {
         batDocuments: { orderBy: { createdAt: 'desc' } },
       },
     });
+    if (!order) {
+      throw new NotFoundException('Commande introuvable');
+    }
+    return order;
   }
 
   async listBatDocuments(salesOrderId: string) {

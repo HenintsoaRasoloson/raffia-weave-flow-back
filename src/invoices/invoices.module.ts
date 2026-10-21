@@ -3,6 +3,7 @@ import { AuditModule } from '../common/audit.module';
 import { CompanySettingsModule } from '../company-settings/company-settings.module';
 import { GedModule } from '../ged/ged.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { SalesOrdersModule } from '../sales-orders/sales-orders.module';
 import { InvoiceDocumentTemplatesService } from './invoice-document-templates.service';
 import { InvoiceDocumentsService } from './invoice-documents.service';
 import { InvoicePaymentsService } from './invoice-payments.service';
@@ -10,7 +11,13 @@ import { InvoicesController } from './invoices.controller';
 import { InvoicesService } from './invoices.service';
 
 @Module({
-  imports: [AuditModule, NotificationsModule, CompanySettingsModule, GedModule],
+  imports: [
+    AuditModule,
+    NotificationsModule,
+    CompanySettingsModule,
+    GedModule,
+    SalesOrdersModule,
+  ],
   controllers: [InvoicesController],
   providers: [
     InvoiceDocumentsService,

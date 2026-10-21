@@ -56,6 +56,36 @@ describe('ClientsService legal form and pricing', () => {
     );
   });
 
+  it('persists a complete client address', async () => {
+    const prisma = {
+      client: {
+        create: jest.fn().mockResolvedValue({ id: 'c1' }),
+      },
+    } as unknown as PrismaService;
+    const service = new ClientsService(prisma, minio, gedPaths);
+
+    await service.create({
+      name: 'Atelier Tana',
+      type: 'B2B',
+      legalForm: 'INDIVIDUAL',
+      addressLine: 'Lot II M 45 Bis',
+      postalCode: '101',
+      city: 'Antananarivo',
+      country: 'Madagascar',
+    });
+
+    expect(prisma.client.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          addressLine: 'Lot II M 45 Bis',
+          postalCode: '101',
+          city: 'Antananarivo',
+          country: 'Madagascar',
+        }),
+      }),
+    );
+  });
+
   it('rejects variant prices for B2C clients', async () => {
     const prisma = {
       client: {

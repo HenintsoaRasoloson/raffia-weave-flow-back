@@ -7,6 +7,8 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -17,6 +19,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { Response } from 'express';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
@@ -54,6 +57,28 @@ export class CatalogSharesController {
   @ApiOkResponse({ type: CatalogShareResponseDto })
   getPublicByToken(@Param('token') token: string) {
     return this.catalogSharesService.getPublicByToken(token);
+  }
+
+  @Get('public/:token/products/:productId/images/:imageId')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Lire une image produit d\'un catalogue public' })
+  async getPublicProductImage(
+    @Param('token') token: string,
+    @Param('productId') productId: string,
+    @Param('imageId') imageId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const image = await this.catalogSharesService.getPublicProductImage(
+      token,
+      productId,
+      imageId,
+    );
+    res.setHeader('Content-Type', image.mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${image.originalName}"`,
+    );
+    return new StreamableFile(image.buffer);
   }
 
   @Get(':id')

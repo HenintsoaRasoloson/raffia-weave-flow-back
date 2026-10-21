@@ -15,6 +15,7 @@ export class RevenueSeries {
 
 export class ProductionOrder {
   id: string;
+  orderNumber: string;
   product: string;
   qty: number;
   status: 'Planifié' | 'Préparation' | 'En cours' | 'Terminé';
@@ -25,6 +26,7 @@ export class ProductionOrder {
 
 export class RecentOrder {
   id: string;
+  orderNumber: string;
   client: string;
   type: 'B2B' | 'B2C';
   date: string;

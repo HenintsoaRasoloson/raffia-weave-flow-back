@@ -15,4 +15,11 @@ export class CatalogShareProductResponseDto {
 
   @ApiProperty({ required: false })
   productBasePrice?: string;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Identifiant de la première image produit (catalogue public)',
+  })
+  imageId?: string | null;
 }

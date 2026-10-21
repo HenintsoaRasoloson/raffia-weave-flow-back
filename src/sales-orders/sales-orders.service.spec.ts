@@ -259,3 +259,57 @@ describe('SalesOrdersService price resolution', () => {
     expect(salesOrderCreate).toHaveBeenCalled();
   });
 });
+
+describe('SalesOrdersService status transitions', () => {
+  function buildService(prisma: PrismaService) {
+    return new SalesOrdersService(
+      prisma,
+      { log: jest.fn() } as unknown as AuditService,
+      { notifyRoles: jest.fn().mockResolvedValue(undefined) } as unknown as NotificationsService,
+      { isEnabled: () => false } as unknown as MinioService,
+      {} as GedPathsService,
+      {
+        allocateNextReferenceLevel: jest.fn().mockResolvedValue(1),
+        buildReferenceNumber: jest.fn().mockReturnValue('CMD/000001'),
+        parseReferenceNumber: jest.fn(),
+      } as unknown as DocumentReferenceService,
+      { createInTransaction: jest.fn() } as unknown as ProductsService,
+    );
+  }
+
+  it('allows DELIVERED -> INVOICED', async () => {
+    const prisma = {
+      salesOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: 'DELIVERED',
+          batRequired: false,
+          batApprovedAt: null,
+        }),
+        update: jest.fn().mockResolvedValue({ id: 'so1', status: 'INVOICED' }),
+      },
+    } as unknown as PrismaService;
+    const service = buildService(prisma);
+
+    await expect(
+      service.updateStatus('so1', { status: 'INVOICED' }, 'user-1'),
+    ).resolves.toMatchObject({ status: 'INVOICED' });
+  });
+
+  it('rejects QUOTE -> INVOICED', async () => {
+    const prisma = {
+      salesOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: 'QUOTE',
+          batRequired: false,
+          batApprovedAt: null,
+        }),
+      },
+    } as unknown as PrismaService;
+    const service = buildService(prisma);
+
+    await expect(
+      service.updateStatus('so1', { status: 'INVOICED' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+

@@ -20,6 +20,7 @@ import { UploadInvoiceDocumentDto } from './dto/upload-invoice-document.dto';
 import { InvoiceTemplateResponseDto } from './dto/invoice-template-response.dto';
 import { UpsertInvoiceTemplateDto } from './dto/upsert-invoice-template.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { SalesOrdersService } from '../sales-orders/sales-orders.service';
 import { InvoiceDocumentsService } from './invoice-documents.service';
 import { InvoicePaymentsService } from './invoice-payments.service';
 
@@ -38,6 +39,7 @@ export class InvoicesService {
     private readonly documentReferenceService: DocumentReferenceService,
     private readonly documentsService: InvoiceDocumentsService,
     private readonly paymentsService: InvoicePaymentsService,
+    private readonly salesOrdersService: SalesOrdersService,
   ) {}
 
   async findAll(query: ListQueryDto) {
@@ -278,6 +280,24 @@ export class InvoicesService {
           totalTtc: { after: totalTtc },
         },
       });
+    }
+
+    if (
+      created.salesOrderId &&
+      normalizedType === InvoiceType.FINAL &&
+      created.status !== InvoiceStatus.DRAFT &&
+      created.status !== InvoiceStatus.CANCELLED
+    ) {
+      await this.salesOrdersService
+        .updateStatus(created.salesOrderId, { status: 'INVOICED' })
+        .catch((err) =>
+          this.logger.warn({
+            msg: 'Impossible de passer la commande en facturée',
+            salesOrderId: created.salesOrderId,
+            invoiceId: created.id,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
     }
 
     // Quand la proforma est créée, notifier le resp général pour qu'il l'envoie au client

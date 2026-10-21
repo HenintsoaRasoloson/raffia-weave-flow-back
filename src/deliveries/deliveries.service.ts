@@ -15,6 +15,10 @@ import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 
 const DELIVERY_PREFIX = 'LIV';
 const DELIVERY_SORT_FIELDS = ['createdAt', 'eta', 'deliveredAt', 'deliveryNumber'] as const;
+const SHIPPING_STATUSES: DeliveryStatus[] = [
+  DeliveryStatus.IN_TRANSIT,
+  DeliveryStatus.DELIVERED,
+];
 
 @Injectable()
 export class DeliveriesService {
@@ -64,7 +68,11 @@ export class DeliveriesService {
     });
   }
 
-  create(dto: CreateDeliveryDto) {
+  async create(dto: CreateDeliveryDto) {
+    if (dto.status && SHIPPING_STATUSES.includes(dto.status)) {
+      await this.assertQualityApprovedForShipment(dto.salesOrderId);
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const salesOrder = await tx.salesOrder.findUnique({
         where: { id: dto.salesOrderId },
@@ -120,16 +128,22 @@ export class DeliveriesService {
     });
   }
 
-  update(id: string, dto: UpdateDeliveryDto) {
-    return this.prisma.$transaction(async (tx) => {
-      const current = await tx.delivery.findUnique({
-        where: { id },
-        select: { id: true, referenceLevel: true, salesOrderId: true },
-      });
-      if (!current) {
-        throw new NotFoundException('Livraison introuvable');
-      }
+  async update(id: string, dto: UpdateDeliveryDto) {
+    const current = await this.prisma.delivery.findUnique({
+      where: { id },
+      select: { id: true, referenceLevel: true, salesOrderId: true },
+    });
+    if (!current) {
+      throw new NotFoundException('Livraison introuvable');
+    }
 
+    if (dto.status && SHIPPING_STATUSES.includes(dto.status)) {
+      await this.assertQualityApprovedForShipment(
+        dto.salesOrderId ?? current.salesOrderId,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
       const targetSalesOrderId = dto.salesOrderId ?? current.salesOrderId;
       const salesOrder = await tx.salesOrder.findUnique({
         where: { id: targetSalesOrderId },
@@ -185,6 +199,8 @@ export class DeliveriesService {
       throw new NotFoundException('Livraison introuvable');
     }
 
+    await this.assertQualityApprovedForShipment(delivery.salesOrderId);
+
     const allowedSourceStatuses: DeliveryStatus[] = [
       DeliveryStatus.PLANNED,
       DeliveryStatus.PREPARING,
@@ -237,6 +253,26 @@ export class DeliveriesService {
 
   remove(id: string) {
     return this.prisma.delivery.delete({ where: { id } });
+  }
+
+  private async assertQualityApprovedForShipment(salesOrderId: string) {
+    const pending = await this.prisma.productionOrder.findMany({
+      where: {
+        salesOrderId,
+        status: { not: 'CANCELLED' },
+        qualityApproved: false,
+      },
+      select: { orderNumber: true },
+    });
+    if (pending.length === 0) {
+      return;
+    }
+
+    throw new BadRequestException(
+      `Contrôle qualité requis avant expédition (${pending
+        .map((order) => order.orderNumber)
+        .join(', ')}). Validez la qualité sur l'ordre de fabrication.`,
+    );
   }
 }
 
