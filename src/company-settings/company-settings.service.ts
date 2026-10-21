@@ -57,6 +57,19 @@ const PRISMA_TO_KIND: Record<CompanyLogoKind, CompanyLogoKindParam> = {
   EMAIL: 'email',
 };
 
+function isMissingObjectError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const name = 'name' in error ? String(error.name) : '';
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    name === 'NoSuchKey' ||
+    name === 'NotFound' ||
+    /specified key does not exist/i.test(message)
+  );
+}
+
 @Injectable()
 export class CompanySettingsService {
   constructor(
@@ -339,11 +352,18 @@ export class CompanySettingsService {
   async resolveLogoDataUri(
     kindParam: CompanyLogoKindParam = 'invoice',
   ): Promise<string | null> {
-    const binary = await this.resolveLogoBinary(kindParam);
-    if (!binary) {
-      return null;
+    try {
+      const binary = await this.resolveLogoBinary(kindParam);
+      if (!binary) {
+        return null;
+      }
+      return `data:${binary.mimeType};base64,${binary.buffer.toString('base64')}`;
+    } catch (error) {
+      if (error instanceof NotFoundException || isMissingObjectError(error)) {
+        return null;
+      }
+      throw error;
     }
-    return `data:${binary.mimeType};base64,${binary.buffer.toString('base64')}`;
   }
 
   private async invalidateSettingsCache() {
@@ -391,10 +411,17 @@ export class CompanySettingsService {
   private async readLogoBinary(logo: CompanyLogo) {
     let storedBuffer: Buffer;
     if (logo.bucket && logo.objectKey && this.minioService.isEnabled()) {
-      storedBuffer = await this.minioService.getObjectAsBuffer({
-        bucket: logo.bucket,
-        key: logo.objectKey,
-      });
+      try {
+        storedBuffer = await this.minioService.getObjectAsBuffer({
+          bucket: logo.bucket,
+          key: logo.objectKey,
+        });
+      } catch (error) {
+        if (isMissingObjectError(error)) {
+          throw new NotFoundException('Fichier logo indisponible');
+        }
+        throw error;
+      }
     } else if (logo.storagePath) {
       storedBuffer = await readFile(logo.storagePath);
     } else {

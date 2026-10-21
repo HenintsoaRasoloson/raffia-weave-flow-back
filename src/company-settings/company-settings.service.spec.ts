@@ -289,4 +289,53 @@ describe('CompanySettingsService', () => {
       }),
     );
   });
+
+  it('resolveLogoDataUri returns null when MinIO object is missing', async () => {
+    const missing = Object.assign(new Error('The specified key does not exist.'), {
+      name: 'NoSuchKey',
+    });
+    const minioEnabled = {
+      isEnabled: () => true,
+      putObject: jest.fn(),
+      getObjectAsBuffer: jest.fn().mockRejectedValue(missing),
+      removeObject: jest.fn(),
+      getSignedDownloadUrl: jest.fn(),
+    } as unknown as MinioService;
+
+    const prisma = {
+      companySetting: {
+        findFirst: jest.fn().mockResolvedValue(settingsRow),
+      },
+      companyLogo: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'clg1',
+            companySettingId: 'cst1',
+            kind: 'INVOICE',
+            originalName: 'logo.png',
+            mimeType: 'image/png',
+            bucket: 'ged-raw',
+            objectKey: 'missing-key',
+            storagePath: null,
+            originalSize: 10,
+            compressedSize: 10,
+            compressionAlgo: 'NONE',
+            uploadedById: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]),
+      },
+    } as unknown as PrismaService;
+
+    const service = new CompanySettingsService(
+      prisma,
+      minioEnabled,
+      gedPaths,
+      { log: jest.fn() } as never,
+      { get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), del: jest.fn() } as never,
+    );
+
+    await expect(service.resolveLogoDataUri('invoice')).resolves.toBeNull();
+  });
 });
