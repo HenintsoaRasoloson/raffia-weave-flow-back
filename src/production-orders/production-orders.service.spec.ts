@@ -6,7 +6,10 @@ import { lockComponentsForUpdate } from '../common/stock/stock-lock.util';
 import type { NotificationsService } from '../notifications/notifications.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SalesOrdersService } from '../sales-orders/sales-orders.service';
-import { ProductionOrdersService } from './production-orders.service';
+import {
+  canApproveQualityFromStages,
+  ProductionOrdersService,
+} from './production-orders.service';
 
 jest.mock('../prisma/prisma.service', () => ({
   PrismaService: class PrismaService {},
@@ -343,5 +346,55 @@ describe('ProductionOrdersService consumeMaterials', () => {
       BadRequestException,
     );
     expect(tx.component.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProductionOrdersService approveQuality', () => {
+  const allZero = [
+    ProductionStage.PREPARATION,
+    ProductionStage.CROCHET,
+    ProductionStage.WEAVING,
+    ProductionStage.LEATHER,
+    ProductionStage.FINISHING,
+    ProductionStage.QUALITY_CONTROL,
+  ].map((stage) => ({ stage, progress: 0 }));
+
+  it('blocks quality OK when every workshop stage is at 0', () => {
+    expect(canApproveQualityFromStages(allZero)).toBe(false);
+  });
+
+  it('allows quality OK when quality control is complete', () => {
+    expect(
+      canApproveQualityFromStages([
+        ...allZero.slice(0, 5),
+        { stage: ProductionStage.QUALITY_CONTROL, progress: 100 },
+      ]),
+    ).toBe(true);
+  });
+
+  it('rejects the API call when stages are still at 0', async () => {
+    const prisma = {
+      productionOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: ProductionStatus.COMPLETED,
+          qualityApproved: false,
+          stages: allZero,
+        }),
+        update: jest.fn(),
+      },
+    } as unknown as PrismaService;
+
+    const service = new ProductionOrdersService(
+      prisma,
+      { log: jest.fn() } as unknown as AuditService,
+      { notifyRole: jest.fn() } as unknown as NotificationsService,
+      createDocumentReferenceMock(),
+      {} as SalesOrdersService,
+    );
+
+    await expect(service.approveQuality('of-1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.productionOrder.update).not.toHaveBeenCalled();
   });
 });

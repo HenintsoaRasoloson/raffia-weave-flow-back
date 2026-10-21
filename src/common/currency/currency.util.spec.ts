@@ -1,5 +1,7 @@
 import {
   convertAmount,
+  formatMoneyLabel,
+  formatSignedMoneyLabel,
   normalizeCurrency,
   roundMoney,
 } from './currency.util';
@@ -32,5 +34,25 @@ describe('currency.util', () => {
 
   it('roundMoney rounds to 2 decimals', () => {
     expect(roundMoney(1.005)).toBe(1.01);
+  });
+
+  it('formats MGA without compact k€', () => {
+    const formatted = formatMoneyLabel(170_000, 'MGA');
+    expect(formatted).toMatch(/170/);
+    expect(formatted.toLowerCase()).toMatch(/mga|ariary/);
+    expect(formatted).not.toMatch(/€/);
+    expect(formatted.toLowerCase()).not.toMatch(/k€|0\.0k/);
+  });
+
+  it('formats a 34 EUR amount without collapsing to 0.0k', () => {
+    const formatted = formatMoneyLabel(34, 'EUR');
+    expect(formatted).toMatch(/34/);
+    expect(formatted).not.toMatch(/0[.,]0\s*k/i);
+  });
+
+  it('prefixes positive treasury deltas', () => {
+    const formatted = formatSignedMoneyLabel(12_000, 'MGA');
+    expect(formatted.startsWith('+')).toBe(true);
+    expect(formatted).toMatch(/12/);
   });
 });

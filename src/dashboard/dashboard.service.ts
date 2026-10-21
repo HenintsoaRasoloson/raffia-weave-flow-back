@@ -1,10 +1,15 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
-import { PrismaService } from '../prisma/prisma.service';
-import { SALES_ORDER_IN_PROGRESS_STATUSES } from '../common/domain/sales-order-status.transitions';
 import { CACHE_KEYS, CACHE_TTL_MS } from '../common/cache/cache-keys';
+import { DEFAULT_CURRENCY } from '../common/currency/currency.constants';
+import {
+  formatMoneyLabel,
+  formatSignedMoneyLabel,
+} from '../common/currency/currency.util';
+import { SALES_ORDER_IN_PROGRESS_STATUSES } from '../common/domain/sales-order-status.transitions';
 import { FinancialTrackingService } from '../financial-tracking/financial-tracking.service';
+import { PrismaService } from '../prisma/prisma.service';
 import {
   KpiDto,
   RevenueSeries,
@@ -150,10 +155,12 @@ export class DashboardService {
     const previousTreasury = previousOverview.treasury.trackedBalance;
     const treasuryDelta = treasury - previousTreasury;
 
+    const currency = await this.getCompanyCurrency();
+
     const kpis: KpiDto[] = [
       {
         label: "Chiffre d'affaires",
-        value: `€${(currentCA / 1000).toFixed(1)}k`,
+        value: formatMoneyLabel(currentCA, currency),
         delta: `${caDelta > 0 ? '+' : ''}${caDelta.toFixed(1)}%`,
         trend: caDelta >= 0 ? 'up' : 'down',
         hint: 'vs période précédente',
@@ -174,8 +181,8 @@ export class DashboardService {
       },
       {
         label: 'Trésorerie',
-        value: `€${(treasury / 1000).toFixed(1)}k`,
-        delta: `${treasuryDelta >= 0 ? '+' : ''}€${(treasuryDelta / 1000).toFixed(1)}k`,
+        value: formatMoneyLabel(treasury, currency),
+        delta: formatSignedMoneyLabel(treasuryDelta, currency),
         trend: treasuryDelta >= 0 ? 'up' : 'down',
         hint: 'disponible',
       },
@@ -252,6 +259,7 @@ export class DashboardService {
   }
 
   async getRecentOrders(limit: number = 10): Promise<RecentOrder[]> {
+    const currency = await this.getCompanyCurrency();
     const orders = await this.prisma.salesOrder.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -266,7 +274,10 @@ export class DashboardService {
       client: order.client?.name ?? 'Client inconnu',
       type: order.orderType,
       date: order.orderDate.toLocaleDateString('fr-FR'),
-      total: `€${Number(order.totalTtc ?? 0).toFixed(0)}`,
+      total: formatMoneyLabel(
+        Number(order.totalTtc ?? 0),
+        order.currency ?? currency,
+      ),
       status: SALES_ORDER_STATUS_LABELS[String(order.status)] ?? String(order.status),
     }));
   }
@@ -327,12 +338,13 @@ export class DashboardService {
     );
 
     if (thisMonthCA > 0) {
+      const currency = await this.getCompanyCurrency();
       alerts.push({
         id: 'success-1',
         type: 'success',
         icon: 'TrendingUp',
         title: 'Rythme actuel',
-        message: `CA mensuel: €${(thisMonthCA / 1000).toFixed(1)}k`,
+        message: `CA mensuel: ${formatMoneyLabel(thisMonthCA, currency)}`,
         actionUrl: '/ventes',
       });
     }
@@ -576,5 +588,13 @@ export class DashboardService {
 
   private toIsoDate(date: Date): string {
     return date.toISOString().slice(0, 10);
+  }
+
+  private async getCompanyCurrency(): Promise<string> {
+    const settings = await this.prisma.companySetting.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { defaultCurrency: true },
+    });
+    return settings?.defaultCurrency ?? DEFAULT_CURRENCY;
   }
 }

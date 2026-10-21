@@ -70,3 +70,31 @@ export function decimalToNumber(value: unknown): number {
   }
   return Number(value);
 }
+
+/**
+ * Libellé monétaire lisible (jamais de compact « k€ »).
+ * 170 000 MGA reste 170 000 MGA, pas 0,0 k€.
+ */
+export function formatMoneyLabel(
+  amount: number,
+  currency: string = DEFAULT_CURRENCY,
+): string {
+  const code = isSupportedCurrency(currency) ? currency : DEFAULT_CURRENCY;
+  const value = Number.isFinite(amount) ? amount : 0;
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: code,
+    maximumFractionDigits: code === 'MGA' ? 0 : 2,
+    minimumFractionDigits: 0,
+  }).format(value);
+}
+
+export function formatSignedMoneyLabel(
+  amount: number,
+  currency: string = DEFAULT_CURRENCY,
+): string {
+  const formatted = formatMoneyLabel(Math.abs(amount), currency);
+  if (amount > 0) return `+${formatted}`;
+  if (amount < 0) return `-${formatted}`;
+  return formatted;
+}

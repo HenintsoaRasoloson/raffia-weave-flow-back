@@ -51,6 +51,21 @@ const PRODUCTION_STAGE_LABELS: Record<ProductionStage, string> = {
   QUALITY_CONTROL: 'Contrôle',
 };
 
+const QUALITY_BLOCK_REASON =
+  "Qualité OK impossible : renseignez les 6 postes atelier (progression > 0) ou terminez le contrôle qualité à 100 %.";
+
+export function canApproveQualityFromStages(
+  stages: Array<{ stage: ProductionStage | string; progress: number | null }>,
+): boolean {
+  const byStage = new Map(
+    stages.map((step) => [String(step.stage), Number(step.progress ?? 0)]),
+  );
+  if ((byStage.get(ProductionStage.QUALITY_CONTROL) ?? 0) >= 100) {
+    return true;
+  }
+  return PRODUCTION_STAGES_ORDERED.every((stage) => (byStage.get(stage) ?? 0) > 0);
+}
+
 @Injectable()
 export class ProductionOrdersService {
   constructor(
@@ -638,7 +653,11 @@ export class ProductionOrdersService {
   async approveQuality(id: string, userId?: string) {
     const order = await this.prisma.productionOrder.findUnique({
       where: { id },
-      select: { status: true, qualityApproved: true },
+      select: {
+        status: true,
+        qualityApproved: true,
+        stages: { select: { stage: true, progress: true } },
+      },
     });
     if (!order) {
       throw new NotFoundException('Ordre de fabrication introuvable');
@@ -650,6 +669,9 @@ export class ProductionOrdersService {
     }
     if (order.qualityApproved) {
       throw new BadRequestException('Cet OF a déjà été validé en qualité');
+    }
+    if (!canApproveQualityFromStages(order.stages)) {
+      throw new BadRequestException(QUALITY_BLOCK_REASON);
     }
     const updated = await this.prisma.productionOrder.update({
       where: { id },

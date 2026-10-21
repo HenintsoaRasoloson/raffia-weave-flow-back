@@ -1,8 +1,8 @@
 /** Cache-aside keys (memory or Redis via REDIS_URL). */
 export const CACHE_KEYS = {
   companySettings: 'company-settings:v1',
-  dashboard: (days: number) => `dashboard:v1:${days}`,
-  dashboardKpis: (days: number) => `dashboard:kpis:v1:${days}`,
+  dashboard: (days: number) => `dashboard:v2:${days}`,
+  dashboardKpis: (days: number) => `dashboard:kpis:v2:${days}`,
 } as const;
 
 /** TTL in milliseconds (cache-manager v7). */
