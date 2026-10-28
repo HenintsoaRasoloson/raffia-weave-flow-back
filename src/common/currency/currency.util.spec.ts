@@ -39,7 +39,8 @@ describe('currency.util', () => {
   it('formats MGA without compact k€', () => {
     const formatted = formatMoneyLabel(170_000, 'MGA');
     expect(formatted).toMatch(/170/);
-    expect(formatted.toLowerCase()).toMatch(/mga|ariary/);
+    expect(formatted).toMatch(/Ar$/);
+    expect(formatted).not.toMatch(/MGA/i);
     expect(formatted).not.toMatch(/€/);
     expect(formatted.toLowerCase()).not.toMatch(/k€|0\.0k/);
   });
