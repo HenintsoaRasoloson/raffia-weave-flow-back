@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client';
+import { AuditService } from '../common/audit.service';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
 import { buildFrenchTextSearchOr } from '../common/query/search.util';
@@ -12,7 +13,10 @@ const BOM_ITEM_SORT_FIELDS = ['createdAt', 'quantity'] as const;
 
 @Injectable()
 export class BomItemsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async findAll(query: ListQueryDto) {
     const page = query.page ?? 1;
@@ -64,8 +68,8 @@ export class BomItemsService {
     });
   }
 
-  create(dto: CreateBomItemDto) {
-    return this.prisma.bomItem.create({
+  async create(dto: CreateBomItemDto, userId?: string) {
+    const created = await this.prisma.bomItem.create({
       data: {
         productId: dto.productId,
         variantId: dto.variantId,
@@ -75,10 +79,34 @@ export class BomItemsService {
         unitCost: dto.unitCost,
       },
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'Product',
+        entityId: created.productId,
+        action: 'PRODUCT_UPDATED',
+        userId,
+        changes: {
+          bomQuantity: { after: Number(created.quantity) },
+          componentId: { after: created.componentId },
+        },
+        details: 'Ligne de nomenclature ajoutée',
+      });
+    }
+
+    return created;
   }
 
-  update(id: string, dto: UpdateBomItemDto) {
-    return this.prisma.bomItem.update({
+  async update(id: string, dto: UpdateBomItemDto, userId?: string) {
+    const before = await this.prisma.bomItem.findUnique({
+      where: { id },
+      select: { productId: true, quantity: true, componentId: true },
+    });
+    if (!before) {
+      throw new NotFoundException('Ligne de nomenclature introuvable');
+    }
+
+    const updated = await this.prisma.bomItem.update({
       where: { id },
       data: {
         ...(dto.productId !== undefined ? { productId: dto.productId } : {}),
@@ -89,9 +117,53 @@ export class BomItemsService {
         ...(dto.unitCost !== undefined ? { unitCost: dto.unitCost } : {}),
       },
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'Product',
+        entityId: updated.productId,
+        action: 'PRODUCT_UPDATED',
+        userId,
+        changes: {
+          bomQuantity: {
+            before: Number(before.quantity),
+            after: Number(updated.quantity),
+          },
+          componentId: {
+            before: before.componentId,
+            after: updated.componentId,
+          },
+        },
+        details: 'Ligne de nomenclature mise à jour',
+      });
+    }
+
+    return updated;
   }
 
-  remove(id: string) {
-    return this.prisma.bomItem.delete({ where: { id } });
+  async remove(id: string, userId?: string) {
+    const existing = await this.prisma.bomItem.findUnique({
+      where: { id },
+      select: { productId: true, quantity: true, componentId: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Ligne de nomenclature introuvable');
+    }
+
+    await this.prisma.bomItem.delete({ where: { id } });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'Product',
+        entityId: existing.productId,
+        action: 'PRODUCT_UPDATED',
+        userId,
+        changes: {
+          bomQuantity: { before: Number(existing.quantity), after: null },
+          componentId: { before: existing.componentId, after: null },
+        },
+        details: 'Ligne de nomenclature supprimée',
+      });
+    }
   }
 }

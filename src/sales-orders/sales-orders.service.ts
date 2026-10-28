@@ -14,6 +14,7 @@ import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { buildFieldChanges } from '../common/audit.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { compressBufferIfNeeded, decompressBufferIfNeeded } from '../ged/compression.util';
 import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
@@ -389,8 +390,21 @@ export class SalesOrdersService {
     return created;
   }
 
-  update(id: string, dto: UpdateSalesOrderDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async update(id: string, dto: UpdateSalesOrderDto, userId?: string) {
+    const current = await this.prisma.salesOrder.findUnique({
+      where: { id },
+      select: {
+        status: true,
+        orderType: true,
+        taxRate: true,
+        notes: true,
+        batRequired: true,
+        currency: true,
+        clientId: true,
+      },
+    });
+
+    const updated = await this.prisma.$transaction(async (tx) => {
       const data: Prisma.SalesOrderUpdateInput = {
         ...(dto.clientId !== undefined ? { clientId: dto.clientId } : {}),
         ...(dto.orderType !== undefined ? { orderType: dto.orderType } : {}),
@@ -435,6 +449,40 @@ export class SalesOrdersService {
 
       return updated;
     });
+
+    if (userId && current) {
+      const changes = buildFieldChanges(
+        {
+          status: current.status,
+          orderType: current.orderType,
+          taxRate: current.taxRate,
+          notes: current.notes,
+          batRequired: current.batRequired,
+          currency: current.currency,
+          clientId: current.clientId,
+        },
+        {
+          status: updated.status,
+          orderType: updated.orderType,
+          taxRate: updated.taxRate,
+          notes: updated.notes,
+          batRequired: updated.batRequired,
+          currency: updated.currency,
+          clientId: updated.clientId,
+        },
+      );
+      if (changes) {
+        await this.auditService.log({
+          entityType: 'SalesOrder',
+          entityId: id,
+          action: 'SALES_ORDER_UPDATED',
+          userId,
+          changes,
+        });
+      }
+    }
+
+    return updated;
   }
 
   async updateStatus(id: string, dto: UpdateSalesOrderStatusDto, userId?: string) {

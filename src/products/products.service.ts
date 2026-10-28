@@ -8,6 +8,8 @@ import {
   ProductStatus,
 } from '../generated/prisma/client';
 import type { PrismaTransactionClient } from '../common/document-reference/document-reference.service';
+import { AuditService } from '../common/audit.service';
+import { buildFieldChanges } from '../common/audit.util';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { enumWhere } from '../common/prisma/enum-filter.util';
 import { dateFieldWhere, optionalEquals } from '../common/query/date-range.util';
@@ -38,6 +40,7 @@ export class ProductsService {
     private readonly prisma: PrismaService,
     private readonly minioService: MinioService,
     private readonly gedPathsService: GedPathsService,
+    private readonly auditService: AuditService,
   ) {}
 
   async findAll(query: ListQueryDto) {
@@ -162,18 +165,21 @@ export class ProductsService {
     };
   }
 
-  async upsertTechnicalSheet(productId: string, dto: UpsertProductTechnicalSheetDto) {
+  async upsertTechnicalSheet(
+    productId: string,
+    dto: UpsertProductTechnicalSheetDto,
+    userId?: string,
+  ) {
     await this.ensureProductExists(productId);
 
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.productTechnicalSheet.findUnique({
-        where: { productId },
-        select: { id: true, version: true },
-      });
+    const existing = await this.prisma.productTechnicalSheet.findUnique({
+      where: { productId },
+      select: { id: true, version: true, title: true },
+    });
+    const nextVersion = existing ? existing.version + 1 : 1;
 
-      const nextVersion = existing ? existing.version + 1 : 1;
-
-      const sheet = existing
+    const sheet = await this.prisma.$transaction(async (tx) => {
+      const saved = existing
         ? await tx.productTechnicalSheet.update({
             where: { productId },
             data: {
@@ -194,13 +200,13 @@ export class ProductsService {
           });
 
       await tx.productTechnicalSheetElement.deleteMany({
-        where: { technicalSheetId: sheet.id },
+        where: { technicalSheetId: saved.id },
       });
 
       if (dto.elements.length > 0) {
         await tx.productTechnicalSheetElement.createMany({
           data: dto.elements.map((element) => ({
-            technicalSheetId: sheet.id,
+            technicalSheetId: saved.id,
             sequence: element.sequence,
             name: element.name,
             category: element.category,
@@ -218,7 +224,7 @@ export class ProductsService {
       }
 
       return tx.productTechnicalSheet.findUnique({
-        where: { id: sheet.id },
+        where: { id: saved.id },
         include: {
           elements: {
             orderBy: { sequence: 'asc' },
@@ -226,6 +232,22 @@ export class ProductsService {
         },
       });
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'Product',
+        entityId: productId,
+        action: 'PRODUCT_TECHNICAL_SHEET_UPDATED',
+        userId,
+        changes: {
+          version: { before: existing?.version ?? 0, after: nextVersion },
+          title: { before: existing?.title ?? null, after: dto.title },
+        },
+        details: existing ? 'Fiche technique mise à jour' : 'Fiche technique créée',
+      });
+    }
+
+    return sheet;
   }
 
   async uploadImages(
@@ -378,8 +400,26 @@ export class ProductsService {
     };
   }
 
-  create(dto: CreateProductDto) {
-    return this.prisma.$transaction((tx) => this.createInTransaction(tx, dto));
+  async create(dto: CreateProductDto, userId?: string) {
+    const created = await this.prisma.$transaction((tx) =>
+      this.createInTransaction(tx, dto),
+    );
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'Product',
+        entityId: created.id,
+        action: 'PRODUCT_CREATED',
+        userId,
+        changes: {
+          ref: { after: created.ref },
+          name: { after: created.name },
+          basePrice: { after: Number(created.basePrice) },
+          stockOnHand: { after: created.stockOnHand },
+          status: { after: created.status },
+        },
+      });
+    }
+    return created;
   }
 
   /**
@@ -446,14 +486,19 @@ export class ProductsService {
     });
   }
 
-  update(id: string, dto: UpdateProductDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async update(id: string, dto: UpdateProductDto, userId?: string) {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.product.findUnique({
         where: { id },
         select: {
           id: true,
           categoryId: true,
           ref: true,
+          name: true,
+          description: true,
+          basePrice: true,
+          stockOnHand: true,
+          status: true,
           ownership: true,
           ownerClientId: true,
         },
@@ -553,8 +598,49 @@ export class ProductsService {
         }
       }
 
-      return updated;
+      return {
+        previous: existing,
+        product: updated,
+        variantsChanged: Boolean(dto.variants),
+      };
     });
+
+    if (userId) {
+      const changes = buildFieldChanges(
+        {
+          ref: updated.previous.ref,
+          name: updated.previous.name,
+          description: updated.previous.description,
+          basePrice: updated.previous.basePrice,
+          stockOnHand: updated.previous.stockOnHand,
+          status: updated.previous.status,
+          ownership: updated.previous.ownership,
+        },
+        {
+          ref: updated.product.ref,
+          name: updated.product.name,
+          description: updated.product.description,
+          basePrice: updated.product.basePrice,
+          stockOnHand: updated.product.stockOnHand,
+          status: updated.product.status,
+          ownership: updated.product.ownership,
+        },
+      );
+      if (changes || updated.variantsChanged) {
+        await this.auditService.log({
+          entityType: 'Product',
+          entityId: id,
+          action: 'PRODUCT_UPDATED',
+          userId,
+          changes,
+          details: updated.variantsChanged
+            ? 'Variantes mises à jour'
+            : undefined,
+        });
+      }
+    }
+
+    return updated.product;
   }
 
   remove(id: string) {

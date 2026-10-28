@@ -199,8 +199,12 @@ export class SalesOrdersController {
   @RolesAllowed(...SALES_ROLES)
   @ApiOperation({ summary: 'Mettre à jour une commande' })
   @ApiOkResponse({ description: 'Commande mise à jour', type: SalesOrderResponseDto })
-  update(@Param('id') id: string, @Body() dto: UpdateSalesOrderDto) {
-    return this.salesOrdersService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateSalesOrderDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.salesOrdersService.update(id, dto, user.sub);
   }
 
   @Patch(':id/status')

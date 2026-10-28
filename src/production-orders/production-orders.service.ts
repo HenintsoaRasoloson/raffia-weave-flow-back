@@ -11,6 +11,7 @@ import { buildFrenchTextSearchOr } from '../common/query/search.util';
 import { resolveOrderBy } from '../common/query/sort.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
+import { buildFieldChanges } from '../common/audit.util';
 import { DocumentReferenceService } from '../common/document-reference/document-reference.service';
 import { lockComponentsForUpdate } from '../common/stock/stock-lock.util';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -230,11 +231,17 @@ export class ProductionOrdersService {
     return created;
   }
 
-  update(id: string, dto: UpdateProductionOrderDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async update(id: string, dto: UpdateProductionOrderDto, userId?: string) {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const current = await tx.productionOrder.findUnique({
         where: { id },
-        select: { id: true, salesOrderId: true },
+        select: {
+          id: true,
+          salesOrderId: true,
+          status: true,
+          quantity: true,
+          progress: true,
+        },
       });
       if (!current) {
         throw new NotFoundException('Ordre de fabrication introuvable');
@@ -283,14 +290,41 @@ export class ProductionOrdersService {
         data.endDate = new Date(dto.endDate);
       }
 
-      return tx.productionOrder.update({
+      const saved = await tx.productionOrder.update({
         where: { id },
         data,
       });
+      return { previous: current, product: saved };
     });
+
+    if (userId) {
+      const changes = buildFieldChanges(
+        {
+          status: updated.previous.status,
+          quantity: updated.previous.quantity,
+          progress: updated.previous.progress,
+        },
+        {
+          status: updated.product.status,
+          quantity: updated.product.quantity,
+          progress: updated.product.progress,
+        },
+      );
+      if (changes) {
+        await this.auditService.log({
+          entityType: 'ProductionOrder',
+          entityId: id,
+          action: 'PRODUCTION_ORDER_PROGRESS_UPDATED',
+          userId,
+          changes,
+        });
+      }
+    }
+
+    return updated.product;
   }
 
-  async updateProgress(id: string, dto: UpdateProductionProgressDto) {
+  async updateProgress(id: string, dto: UpdateProductionProgressDto, userId?: string) {
     const existing = await this.prisma.productionOrder.findUnique({
       where: { id },
       select: { status: true, progress: true },
@@ -331,10 +365,27 @@ export class ProductionOrdersService {
       updateData.status = nextStatus;
     }
 
-    return this.prisma.productionOrder.update({
+    const saved = await this.prisma.productionOrder.update({
       where: { id },
       data: updateData,
     });
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'ProductionOrder',
+        entityId: id,
+        action: 'PRODUCTION_ORDER_PROGRESS_UPDATED',
+        userId,
+        changes: {
+          progress: { before: existing.progress, after: clamped },
+          ...(nextStatus && nextStatus !== existing.status
+            ? { status: { before: existing.status, after: nextStatus } }
+            : {}),
+        },
+      });
+    }
+
+    return saved;
   }
 
   remove(id: string) {
@@ -583,7 +634,7 @@ export class ProductionOrdersService {
     };
   }
 
-  async upsertStages(id: string, dto: UpsertProductionStagesDto) {
+  async upsertStages(id: string, dto: UpsertProductionStagesDto, userId?: string) {
     const order = await this.prisma.productionOrder.findUnique({
       where: { id },
       select: { id: true, referenceLevel: true },
@@ -647,7 +698,25 @@ export class ProductionOrdersService {
       }
     });
 
-    return this.findOne(id);
+    const saved = await this.findOne(id);
+
+    if (userId) {
+      await this.auditService.log({
+        entityType: 'ProductionOrder',
+        entityId: id,
+        action: 'PRODUCTION_ORDER_PROGRESS_UPDATED',
+        userId,
+        details: 'Etapes atelier mises a jour',
+        changes: Object.fromEntries(
+          dto.stages.map((item) => [
+            item.stage,
+            { after: item.progress ?? 0 },
+          ]),
+        ),
+      });
+    }
+
+    return saved;
   }
 
   async approveQuality(id: string, userId?: string) {

@@ -89,8 +89,9 @@ export class ProductsController {
   upsertTechnicalSheet(
     @Param('id') id: string,
     @Body() dto: UpsertProductTechnicalSheetDto,
+    @CurrentUser() user: JwtAccessPayload,
   ) {
-    return this.productsService.upsertTechnicalSheet(id, dto);
+    return this.productsService.upsertTechnicalSheet(id, dto, user.sub);
   }
 
   @Get(':id/images')
@@ -212,16 +213,23 @@ export class ProductsController {
   @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Créer un produit' })
   @ApiCreatedResponse({ description: 'Produit créé', type: ProductResponseDto })
-  create(@Body() dto: CreateProductDto) {
-    return this.productsService.create(dto);
+  create(
+    @Body() dto: CreateProductDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.productsService.create(dto, user.sub);
   }
 
   @Patch(':id')
   @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Mettre à jour un produit' })
   @ApiOkResponse({ description: 'Produit mis à jour', type: ProductResponseDto })
-  update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
-    return this.productsService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateProductDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.productsService.update(id, dto, user.sub);
   }
 
   @Delete(':id')

@@ -398,3 +398,43 @@ describe('ProductionOrdersService approveQuality', () => {
     expect(prisma.productionOrder.update).not.toHaveBeenCalled();
   });
 });
+
+describe('ProductionOrdersService updateProgress', () => {
+  it('logs progress changes', async () => {
+    const prisma = {
+      productionOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: ProductionStatus.IN_PROGRESS,
+          progress: 20,
+        }),
+        update: jest.fn().mockResolvedValue({
+          id: 'of-1',
+          progress: 50,
+          status: ProductionStatus.IN_PROGRESS,
+        }),
+      },
+    } as unknown as PrismaService;
+    const audit = { log: jest.fn() } as unknown as AuditService;
+
+    const service = new ProductionOrdersService(
+      prisma,
+      audit,
+      {} as NotificationsService,
+      createDocumentReferenceMock(),
+      {} as SalesOrdersService,
+    );
+
+    await service.updateProgress('of-1', { progress: 50 }, 'user-1');
+
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'PRODUCTION_ORDER_PROGRESS_UPDATED',
+        entityId: 'of-1',
+        userId: 'user-1',
+        changes: expect.objectContaining({
+          progress: { before: 20, after: 50 },
+        }),
+      }),
+    );
+  });
+});

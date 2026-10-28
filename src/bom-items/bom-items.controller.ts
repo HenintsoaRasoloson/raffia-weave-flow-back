@@ -1,5 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAccessPayload } from '../auth/auth.types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CATALOG_ROLES,
@@ -37,22 +39,32 @@ export class BomItemsController {
   @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Créer un item BOM' })
   @ApiCreatedResponse({ type: BomItemResponseDto })
-  create(@Body() dto: CreateBomItemDto) {
-    return this.bomItemsService.create(dto);
+  create(
+    @Body() dto: CreateBomItemDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.bomItemsService.create(dto, user.sub);
   }
 
   @Patch(':id')
   @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Mettre à jour un item BOM' })
   @ApiOkResponse({ type: BomItemResponseDto })
-  update(@Param('id') id: string, @Body() dto: UpdateBomItemDto) {
-    return this.bomItemsService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateBomItemDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.bomItemsService.update(id, dto, user.sub);
   }
 
   @Delete(':id')
   @RolesAllowed(...CATALOG_ROLES)
   @ApiOperation({ summary: 'Supprimer un item BOM' })
-  remove(@Param('id') id: string) {
-    return this.bomItemsService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.bomItemsService.remove(id, user.sub);
   }
 }

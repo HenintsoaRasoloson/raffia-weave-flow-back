@@ -1,3 +1,4 @@
+import type { AuditService } from '../common/audit.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { BomItemsService } from './bom-items.service';
 
@@ -13,7 +14,10 @@ describe('BomItemsService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new BomItemsService(prisma);
+    const service = new BomItemsService(
+      prisma,
+      { log: jest.fn() } as unknown as AuditService,
+    );
     const dto = {
       productId: 'prod-1',
       componentId: 'cmp-1',

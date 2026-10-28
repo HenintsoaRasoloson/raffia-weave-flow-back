@@ -90,8 +90,12 @@ export class ProductionOrdersController {
   @RolesAllowed(...PRODUCTION_ROLES)
   @ApiOperation({ summary: 'Mettre à jour un ordre de fabrication' })
   @ApiOkResponse({ description: 'OF mis à jour', type: ProductionOrderResponseDto })
-  update(@Param('id') id: string, @Body() dto: UpdateProductionOrderDto) {
-    return this.productionOrdersService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateProductionOrderDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.productionOrdersService.update(id, dto, user.sub);
   }
 
   @Patch(':id/stages')
@@ -105,8 +109,12 @@ export class ProductionOrdersController {
     description: 'OF avec etapes mises a jour',
     type: ProductionOrderResponseDto,
   })
-  upsertStages(@Param('id') id: string, @Body() dto: UpsertProductionStagesDto) {
-    return this.productionOrdersService.upsertStages(id, dto);
+  upsertStages(
+    @Param('id') id: string,
+    @Body() dto: UpsertProductionStagesDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.productionOrdersService.upsertStages(id, dto, user.sub);
   }
 
   @Patch(':id/progress')
@@ -119,8 +127,9 @@ export class ProductionOrdersController {
   updateProgress(
     @Param('id') id: string,
     @Body() dto: UpdateProductionProgressDto,
+    @CurrentUser() user: JwtAccessPayload,
   ) {
-    return this.productionOrdersService.updateProgress(id, dto);
+    return this.productionOrdersService.updateProgress(id, dto, user.sub);
   }
 
   @Delete(':id')
