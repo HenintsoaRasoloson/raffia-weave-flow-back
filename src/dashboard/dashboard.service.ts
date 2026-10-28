@@ -10,6 +10,7 @@ import {
 import { SALES_ORDER_IN_PROGRESS_STATUSES } from '../common/domain/sales-order-status.transitions';
 import { FinancialTrackingService } from '../financial-tracking/financial-tracking.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { absoluteDelta, percentDelta, signedDelta } from './dashboard.metrics';
 import {
   KpiDto,
   RevenueSeries,
@@ -20,6 +21,9 @@ import {
   DashboardDto,
   PlanningCalendarEvent,
   PlanningCalendarResponse,
+  WorkshopQueueDto,
+  WorkshopQueueItem,
+  WorkshopQueueLane,
 } from './dto/dashboard.dto';
 
 type PlanningEventType = 'PRODUCTION' | 'DELIVERY' | 'PURCHASE';
@@ -31,9 +35,19 @@ interface PlanningCalendarQuery {
 }
 
 const PRODUCTION_ACTIVE_STATUSES = ['PLANNED', 'PREPARATION', 'IN_PROGRESS'] as const;
-const DELIVERY_PENDING_STATUSES = ['PLANNED', 'PREPARING'] as const;
+const DELIVERY_PENDING_STATUSES = ['PLANNED', 'PREPARING', 'IN_TRANSIT'] as const;
+const INVOICE_OPEN_STATUSES = [
+  'DRAFT',
+  'ISSUED',
+  'SENT',
+  'PARTIALLY_PAID',
+  'OVERDUE',
+] as const;
 const INVOICE_PENDING_STATUSES = ['DRAFT', 'ISSUED'] as const;
+const SALES_TO_PROCESS_STATUSES = ['QUOTE', 'TO_PROCESS'] as const;
 const LOW_STOCK_THRESHOLD = 50;
+const QUEUE_ITEM_LIMIT = 8;
+const PRODUCT_CRITICAL_STOCK = 1;
 
 const PRODUCTION_STATUS_LABELS: Record<string, ProductionOrder['status']> = {
   PLANNED: 'Planifié',
@@ -69,15 +83,23 @@ export class DashboardService {
       return cached;
     }
 
-    const [kpis, revenueSeries, productionOrders, recentOrders, alerts, quickStats] =
-      await Promise.all([
-        this.getKpis(days),
-        this.getRevenueChart(8),
-        this.getProductionOrders(),
-        this.getRecentOrders(10),
-        this.getAlerts(),
-        this.getQuickStats(),
-      ]);
+    const [
+      kpis,
+      revenueSeries,
+      productionOrders,
+      recentOrders,
+      alerts,
+      quickStats,
+      queue,
+    ] = await Promise.all([
+      this.getKpis(days),
+      this.getRevenueChart(8),
+      this.getProductionOrders(),
+      this.getRecentOrders(10),
+      this.getAlerts(),
+      this.getQuickStats(),
+      this.getWorkshopQueue(),
+    ]);
 
     const response = {
       kpis,
@@ -86,6 +108,7 @@ export class DashboardService {
       recentOrders,
       alerts,
       quickStats,
+      queue,
     };
     await this.cache.set(cacheKey, response, CACHE_TTL_MS.dashboard);
     return response;
@@ -142,48 +165,48 @@ export class DashboardService {
       (sum, order) => sum + Number(order.totalTtc ?? 0),
       0,
     );
-    const caDelta =
-      previousCA > 0 ? ((currentCA - previousCA) / previousCA) * 100 : 0;
-
-    const ordersDelta = inProgressOrders - previousInProgress;
+    const caDelta = percentDelta(currentCA, previousCA);
+    const ordersDelta = absoluteDelta(inProgressOrders, previousInProgress);
 
     const currentMargin = overview.margins.estimatedMarginRate;
     const previousMargin = previousOverview.margins.estimatedMarginRate;
-    const marginDelta = currentMargin - previousMargin;
-
-    const treasury = overview.treasury.trackedBalance;
-    const previousTreasury = previousOverview.treasury.trackedBalance;
-    const treasuryDelta = treasury - previousTreasury;
+    const marginDelta = percentDelta(currentMargin, previousMargin);
 
     const currency = await this.getCompanyCurrency();
+    const treasury = overview.treasury.trackedBalance;
+    const previousTreasury = previousOverview.treasury.trackedBalance;
+    const treasuryDelta = signedDelta(
+      treasury - previousTreasury,
+      (value) => formatSignedMoneyLabel(value, currency),
+    );
 
     const kpis: KpiDto[] = [
       {
         label: "Chiffre d'affaires",
         value: formatMoneyLabel(currentCA, currency),
-        delta: `${caDelta > 0 ? '+' : ''}${caDelta.toFixed(1)}%`,
-        trend: caDelta >= 0 ? 'up' : 'down',
+        delta: caDelta.delta,
+        trend: caDelta.trend,
         hint: 'vs période précédente',
       },
       {
         label: 'Commandes en cours',
         value: inProgressOrders.toString(),
-        delta: `${ordersDelta > 0 ? '+' : ''}${ordersDelta}`,
-        trend: ordersDelta >= 0 ? 'up' : 'down',
+        delta: ordersDelta.delta,
+        trend: ordersDelta.trend,
         hint: 'B2B + B2C',
       },
       {
         label: 'Marge moyenne',
         value: `${currentMargin.toFixed(1)}%`,
-        delta: `${marginDelta > 0 ? '+' : ''}${marginDelta.toFixed(1)}%`,
-        trend: marginDelta >= 0 ? 'up' : 'down',
+        delta: marginDelta.delta,
+        trend: marginDelta.trend,
         hint: 'vs période précédente',
       },
       {
         label: 'Trésorerie',
         value: formatMoneyLabel(treasury, currency),
-        delta: formatSignedMoneyLabel(treasuryDelta, currency),
-        trend: treasuryDelta >= 0 ? 'up' : 'down',
+        delta: treasuryDelta.delta,
+        trend: treasuryDelta.trend,
         hint: 'disponible',
       },
     ];
@@ -350,6 +373,275 @@ export class DashboardService {
     }
 
     return alerts;
+  }
+
+  async getWorkshopQueue(): Promise<WorkshopQueueDto> {
+    const cached = await this.cache.get<WorkshopQueueDto>(CACHE_KEYS.dashboardQueue);
+    if (cached) {
+      return cached;
+    }
+
+    const today = this.startOfToday();
+    const currency = await this.getCompanyCurrency();
+
+    const [
+      toProcessCount,
+      toProcessRows,
+      toProduceCount,
+      toProduceRows,
+      toProduceOverdue,
+      toDeliverCount,
+      toDeliverRows,
+      toDeliverOverdue,
+      toCollectCount,
+      toCollectRows,
+      toCollectOverdue,
+      criticalProductsCount,
+      criticalProductRows,
+      componentRows,
+      productCount,
+    ] = await Promise.all([
+      this.prisma.salesOrder.count({
+        where: { status: { in: [...SALES_TO_PROCESS_STATUSES] } },
+      }),
+      this.prisma.salesOrder.findMany({
+        where: { status: { in: [...SALES_TO_PROCESS_STATUSES] } },
+        orderBy: { orderDate: 'asc' },
+        take: QUEUE_ITEM_LIMIT,
+        include: { client: { select: { name: true } } },
+      }),
+      this.prisma.productionOrder.count({
+        where: { status: { in: [...PRODUCTION_ACTIVE_STATUSES] } },
+      }),
+      this.prisma.productionOrder.findMany({
+        where: { status: { in: [...PRODUCTION_ACTIVE_STATUSES] } },
+        orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
+        take: QUEUE_ITEM_LIMIT,
+        include: { product: { select: { name: true, ref: true } } },
+      }),
+      this.prisma.productionOrder.count({
+        where: {
+          status: { in: [...PRODUCTION_ACTIVE_STATUSES] },
+          endDate: { lt: today },
+        },
+      }),
+      this.prisma.delivery.count({
+        where: { status: { in: [...DELIVERY_PENDING_STATUSES] } },
+      }),
+      this.prisma.delivery.findMany({
+        where: { status: { in: [...DELIVERY_PENDING_STATUSES] } },
+        orderBy: { eta: 'asc' },
+        take: QUEUE_ITEM_LIMIT,
+        include: { client: { select: { name: true } } },
+      }),
+      this.prisma.delivery.count({
+        where: {
+          status: { in: [...DELIVERY_PENDING_STATUSES] },
+          eta: { lt: today },
+        },
+      }),
+      this.prisma.invoice.count({
+        where: {
+          status: { in: [...INVOICE_OPEN_STATUSES] },
+          type: { not: 'CREDIT_NOTE' },
+        },
+      }),
+      this.prisma.invoice.findMany({
+        where: {
+          status: { in: [...INVOICE_OPEN_STATUSES] },
+          type: { not: 'CREDIT_NOTE' },
+        },
+        orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }],
+        take: QUEUE_ITEM_LIMIT,
+        include: { client: { select: { name: true } } },
+      }),
+      this.prisma.invoice.count({
+        where: {
+          status: { in: [...INVOICE_OPEN_STATUSES] },
+          type: { not: 'CREDIT_NOTE' },
+          dueDate: { lt: today },
+        },
+      }),
+      this.prisma.product.count({
+        where: {
+          status: { not: 'ARCHIVED' },
+          OR: [
+            { stockOnHand: { lte: PRODUCT_CRITICAL_STOCK } },
+            { status: { in: ['LOW_STOCK', 'OUT_OF_STOCK'] } },
+          ],
+        },
+      }),
+      this.prisma.product.findMany({
+        where: {
+          status: { not: 'ARCHIVED' },
+          OR: [
+            { stockOnHand: { lte: PRODUCT_CRITICAL_STOCK } },
+            { status: { in: ['LOW_STOCK', 'OUT_OF_STOCK'] } },
+          ],
+        },
+        orderBy: { stockOnHand: 'asc' },
+        take: QUEUE_ITEM_LIMIT,
+        select: {
+          id: true,
+          ref: true,
+          name: true,
+          stockOnHand: true,
+          status: true,
+        },
+      }),
+      this.prisma.component.findMany({
+        orderBy: { stockQty: 'asc' },
+        take: 40,
+        select: {
+          id: true,
+          ref: true,
+          name: true,
+          stockQty: true,
+          minQty: true,
+          unit: true,
+        },
+      }),
+      this.prisma.product.count({
+        where: { status: { not: 'ARCHIVED' } },
+      }),
+    ]);
+
+    const criticalComponents = componentRows.filter(
+      (component) => Number(component.stockQty) <= Number(component.minQty),
+    );
+    const productSlots = Math.min(criticalProductRows.length, QUEUE_ITEM_LIMIT);
+    const componentSlots = Math.max(0, QUEUE_ITEM_LIMIT - productSlots);
+    const stockItems: WorkshopQueueItem[] = [
+      ...criticalProductRows.slice(0, productSlots).map((product) => {
+        const status =
+          product.stockOnHand <= 0 ? 'OUT_OF_STOCK' : String(product.status);
+        return {
+          id: product.id,
+          kind: 'product' as const,
+          title: product.name,
+          subtitle: product.ref,
+          status,
+          meta: `stock ${product.stockOnHand}`,
+          dueDate: null,
+          overdue: product.stockOnHand <= 0,
+          qty: product.stockOnHand,
+          amount: null,
+        };
+      }),
+      ...criticalComponents.slice(0, componentSlots).map((component) => ({
+        id: component.id,
+        kind: 'component' as const,
+        title: component.name,
+        subtitle: component.ref,
+        status: 'LOW_STOCK',
+        meta: `${Number(component.stockQty)} ${String(component.unit).toLowerCase()} · min ${Number(component.minQty)}`,
+        dueDate: null,
+        overdue: true,
+        qty: Number(component.stockQty),
+        amount: null,
+      })),
+    ];
+
+    const toProcess: WorkshopQueueLane = {
+      count: toProcessCount,
+      items: toProcessRows.map((order) => ({
+        id: order.id,
+        kind: 'salesOrder' as const,
+        title: order.orderNumber,
+        subtitle: `${order.client?.name ?? 'Client inconnu'} · ${order.orderType}`,
+        status: String(order.status),
+        meta: formatMoneyLabel(
+          Number(order.totalTtc ?? 0),
+          order.currency ?? currency,
+        ),
+        dueDate: order.orderDate.toISOString(),
+        overdue: false,
+        qty: null,
+        amount: formatMoneyLabel(
+          Number(order.totalTtc ?? 0),
+          order.currency ?? currency,
+        ),
+      })),
+    };
+
+    const toProduce: WorkshopQueueLane = {
+      count: toProduceCount,
+      items: toProduceRows.map((order) => {
+        const overdue = Boolean(order.endDate && order.endDate < today);
+        return {
+          id: order.id,
+          kind: 'productionOrder' as const,
+          title: order.orderNumber,
+          subtitle: order.product.name,
+          status: String(order.status),
+          meta: `${order.quantity} pcs${order.endDate ? ` · ${this.formatShortDate(order.endDate)}` : ''}`,
+          dueDate: order.endDate?.toISOString() ?? null,
+          overdue,
+          qty: order.quantity,
+          amount: null,
+        };
+      }),
+    };
+
+    const toDeliver: WorkshopQueueLane = {
+      count: toDeliverCount,
+      items: toDeliverRows.map((delivery) => {
+        const overdue = Boolean(delivery.eta && delivery.eta < today);
+        return {
+          id: delivery.id,
+          kind: 'delivery' as const,
+          title: delivery.deliveryNumber,
+          subtitle: delivery.client.name,
+          status: String(delivery.status),
+          meta: delivery.eta ? this.formatShortDate(delivery.eta) : 'ETA —',
+          dueDate: delivery.eta?.toISOString() ?? null,
+          overdue,
+          qty: null,
+          amount: null,
+        };
+      }),
+    };
+
+    const toCollect: WorkshopQueueLane = {
+      count: toCollectCount,
+      items: toCollectRows.map((invoice) => {
+        const remaining = Math.max(
+          0,
+          Number(invoice.totalTtc ?? 0) - Number(invoice.paidAmount ?? 0),
+        );
+        const overdue = Boolean(invoice.dueDate && invoice.dueDate < today);
+        return {
+          id: invoice.id,
+          kind: 'invoice' as const,
+          title: invoice.invoiceNumber,
+          subtitle: invoice.client.name,
+          status: String(invoice.status),
+          meta: formatMoneyLabel(remaining, invoice.currency ?? currency),
+          dueDate: invoice.dueDate?.toISOString() ?? null,
+          overdue,
+          qty: null,
+          amount: formatMoneyLabel(remaining, invoice.currency ?? currency),
+        };
+      }),
+    };
+
+    const criticalStock: WorkshopQueueLane = {
+      count: criticalProductsCount + criticalComponents.length,
+      items: stockItems,
+    };
+
+    const queue: WorkshopQueueDto = {
+      toProcess,
+      toProduce,
+      toDeliver,
+      toCollect,
+      criticalStock,
+      productCount,
+      overdueCount: toProduceOverdue + toDeliverOverdue + toCollectOverdue,
+    };
+
+    await this.cache.set(CACHE_KEYS.dashboardQueue, queue, CACHE_TTL_MS.dashboard);
+    return queue;
   }
 
   async getQuickStats(): Promise<QuickStat[]> {
@@ -588,6 +880,16 @@ export class DashboardService {
 
   private toIsoDate(date: Date): string {
     return date.toISOString().slice(0, 10);
+  }
+
+  private startOfToday(): Date {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  }
+
+  private formatShortDate(date: Date): string {
+    return date.toLocaleDateString('fr-FR');
   }
 
   private async getCompanyCurrency(): Promise<string> {

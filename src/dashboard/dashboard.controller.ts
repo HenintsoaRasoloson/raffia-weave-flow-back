@@ -74,6 +74,15 @@ export class DashboardController {
   }
 
   /**
+   * GET /dashboard/queue
+   * File d'atelier du jour : à traiter, produire, livrer, encaisser, stock critique
+   */
+  @Get('queue')
+  async getWorkshopQueue() {
+    return this.dashboardService.getWorkshopQueue();
+  }
+
+  /**
    * GET /dashboard/calendar
    * Calendrier global du planning (production, livraisons, achats)
    */

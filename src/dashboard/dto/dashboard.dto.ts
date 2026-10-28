@@ -50,6 +50,42 @@ export class QuickStat {
   hint: string;
 }
 
+export type WorkshopQueueItemKind =
+  | 'salesOrder'
+  | 'productionOrder'
+  | 'delivery'
+  | 'invoice'
+  | 'product'
+  | 'component';
+
+export class WorkshopQueueItem {
+  id: string;
+  kind: WorkshopQueueItemKind;
+  title: string;
+  subtitle: string;
+  status: string;
+  meta: string;
+  dueDate: string | null;
+  overdue: boolean;
+  qty: number | null;
+  amount: string | null;
+}
+
+export class WorkshopQueueLane {
+  count: number;
+  items: WorkshopQueueItem[];
+}
+
+export class WorkshopQueueDto {
+  toProcess: WorkshopQueueLane;
+  toProduce: WorkshopQueueLane;
+  toDeliver: WorkshopQueueLane;
+  toCollect: WorkshopQueueLane;
+  criticalStock: WorkshopQueueLane;
+  productCount: number;
+  overdueCount: number;
+}
+
 export class PlanningCalendarEvent {
   id: string;
   type: 'PRODUCTION' | 'DELIVERY' | 'PURCHASE';
@@ -75,4 +111,5 @@ export class DashboardDto {
   recentOrders: RecentOrder[];
   alerts: Alert[];
   quickStats: QuickStat[];
+  queue: WorkshopQueueDto;
 }
