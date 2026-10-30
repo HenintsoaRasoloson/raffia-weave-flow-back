@@ -114,6 +114,7 @@ export class CompanySettingsService {
         ...(dto.siret !== undefined ? { siret: dto.siret } : {}),
         ...(dto.vatNumber !== undefined ? { vatNumber: dto.vatNumber } : {}),
         ...(dto.iban !== undefined ? { iban: dto.iban } : {}),
+        ...(dto.mobileMoney !== undefined ? { mobileMoney: dto.mobileMoney } : {}),
         ...(dto.addressLine !== undefined ? { addressLine: dto.addressLine } : {}),
         ...(dto.city !== undefined ? { city: dto.city } : {}),
         ...(dto.postalCode !== undefined ? { postalCode: dto.postalCode } : {}),
@@ -442,6 +443,7 @@ export class CompanySettingsService {
       siret: string | null;
       vatNumber: string | null;
       iban: string | null;
+      mobileMoney: string | null;
       addressLine: string | null;
       city: string | null;
       postalCode: string | null;
@@ -484,6 +486,7 @@ export class CompanySettingsService {
       siret: settings.siret,
       vatNumber: settings.vatNumber,
       iban: settings.iban,
+      mobileMoney: settings.mobileMoney,
       addressLine: settings.addressLine,
       city: settings.city,
       postalCode: settings.postalCode,

@@ -116,6 +116,9 @@ export class CompanySettingsResponseDto {
   iban?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
+  mobileMoney?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
   addressLine?: string | null;
 
   @ApiPropertyOptional({ nullable: true })

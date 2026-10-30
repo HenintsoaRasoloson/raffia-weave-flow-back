@@ -64,7 +64,7 @@ export class SalesOrdersService {
       const [items, total] = await Promise.all([
         tx.salesOrder.findMany({
           where,
-          include: { client: true, items: true, invoices: true, deliveries: true },
+          include: { client: true, items: { include: { product: { select: { ref: true } }, variant: { select: { sku: true } } } }, invoices: true, deliveries: true },
           orderBy: resolveOrderBy(query, SALES_ORDER_SORT_FIELDS, 'orderDate'),
           skip: (page - 1) * pageSize,
           take: pageSize,
@@ -81,7 +81,7 @@ export class SalesOrdersService {
       where: { id },
       include: {
         client: true,
-        items: true,
+        items: { include: { product: { select: { ref: true } }, variant: { select: { sku: true } } } },
         invoices: true,
         deliveries: true,
         productionOrders: true,
@@ -350,7 +350,7 @@ export class SalesOrdersService {
             }),
           },
         },
-        include: { items: true, client: true },
+        include: { items: { include: { product: { select: { ref: true } }, variant: { select: { sku: true } } } }, client: true },
       });
     });
 

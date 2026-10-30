@@ -304,6 +304,8 @@ model CompanySetting {
   siret               String?
   vatNumber           String?
   iban                String?
+  /// Numéros mobile money (Orange Money, MVola, Airtel Money), une ligne par compte.
+  mobileMoney         String?
   addressLine         String?
   city                String?
   postalCode          String?

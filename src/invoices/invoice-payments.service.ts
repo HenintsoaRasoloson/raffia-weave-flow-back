@@ -173,7 +173,7 @@ export class InvoicePaymentsService {
             : InvoiceStatus.PARTIALLY_PAID,
           paidAt: isFullyPaid ? paidAt : null,
         },
-        include: { items: true, client: true, payments: true },
+        include: { items: { include: { product: { select: { ref: true } }, variant: { select: { sku: true } } } }, client: true, payments: true },
       });
 
       if (userId) {

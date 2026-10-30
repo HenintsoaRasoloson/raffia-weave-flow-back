@@ -15,6 +15,7 @@ describe('CompanySettingsService', () => {
     siret: null,
     vatNumber: null,
     iban: null,
+    mobileMoney: null,
     addressLine: null,
     city: null,
     postalCode: null,

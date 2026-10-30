@@ -28,11 +28,23 @@ export class UpdateCompanySettingsDto {
   @MaxLength(30)
   vatNumber?: string | null;
 
-  @ApiPropertyOptional({ example: 'FR76 3000 4000 0312 3456 7890 143' })
+  @ApiPropertyOptional({
+    example: 'BOA Madagascar — 00012 34567 890',
+    description: 'Comptes bancaires pour virement, une ligne par compte',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(40)
+  @MaxLength(2000)
   iban?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'Orange Money : 034 00 000 00',
+    description: 'Numéros mobile money, une ligne par compte',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  mobileMoney?: string | null;
 
   @ApiPropertyOptional({ example: '12 rue de la Tannerie' })
   @IsOptional()
