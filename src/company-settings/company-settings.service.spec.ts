@@ -80,6 +80,25 @@ describe('CompanySettingsService', () => {
       companyLogo: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      companyProfile: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockImplementation(async ({ data }) => ({
+          id: 'cprof1',
+          phone: null,
+          email: null,
+          logoOriginalName: null,
+          logoMimeType: null,
+          logoBucket: null,
+          logoObjectKey: null,
+          logoStoragePath: null,
+          logoOriginalSize: null,
+          logoCompressedSize: null,
+          logoCompressionAlgo: null,
+          createdAt: settingsRow.createdAt,
+          updatedAt: settingsRow.updatedAt,
+          ...data,
+        })),
+      },
     } as unknown as PrismaService;
 
     const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never, { get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), del: jest.fn() } as never);
@@ -171,6 +190,25 @@ describe('CompanySettingsService', () => {
       companyLogo: {
         findMany: jest.fn().mockResolvedValue([primaryLogo]),
       },
+      companyProfile: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockImplementation(async ({ data }) => ({
+          id: 'cprof1',
+          phone: null,
+          email: null,
+          logoOriginalName: null,
+          logoMimeType: null,
+          logoBucket: null,
+          logoObjectKey: null,
+          logoStoragePath: null,
+          logoOriginalSize: null,
+          logoCompressedSize: null,
+          logoCompressionAlgo: null,
+          createdAt: settingsRow.createdAt,
+          updatedAt: settingsRow.updatedAt,
+          ...data,
+        })),
+      },
     } as unknown as PrismaService;
 
     const service = new CompanySettingsService(prisma, minio, gedPaths, { log: jest.fn() } as never, { get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), del: jest.fn() } as never);
@@ -220,6 +258,25 @@ describe('CompanySettingsService', () => {
       },
       companyLogo: {
         findMany: jest.fn().mockResolvedValue([primaryLogo]),
+      },
+      companyProfile: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockImplementation(async ({ data }) => ({
+          id: 'cprof1',
+          phone: null,
+          email: null,
+          logoOriginalName: null,
+          logoMimeType: null,
+          logoBucket: null,
+          logoObjectKey: null,
+          logoStoragePath: null,
+          logoOriginalSize: null,
+          logoCompressedSize: null,
+          logoCompressionAlgo: null,
+          createdAt: settingsRow.createdAt,
+          updatedAt: settingsRow.updatedAt,
+          ...data,
+        })),
       },
     } as unknown as PrismaService;
 

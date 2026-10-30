@@ -15,7 +15,11 @@ import {
 } from '../common/currency/currency.util';
 import { AuditService } from '../common/audit.service';
 import { CACHE_KEYS, CACHE_TTL_MS } from '../common/cache/cache-keys';
-import type { CompanyLogo, CompanyLogoKind } from '../generated/prisma/client';
+import type {
+  CompanyLogo,
+  CompanyLogoKind,
+  CompanyProfile,
+} from '../generated/prisma/client';
 import { decompressBufferIfNeeded } from '../ged/compression.util';
 import { DEFAULT_GED_BUCKET_RAW } from '../ged/ged.constants';
 import { GedPathsService } from '../ged/ged-paths.service';
@@ -41,6 +45,11 @@ import {
   ConvertCurrencyQueryDto,
   ConvertCurrencyResponseDto,
 } from './dto/convert-currency.dto';
+import {
+  CompanyProfileResponseDto,
+  CreateCompanyProfileDto,
+  UpdateCompanyProfileDto,
+} from './dto/company-profile.dto';
 import { UpdateCompanySettingsDto } from './dto/update-company-settings.dto';
 
 const KIND_TO_PRISMA: Record<CompanyLogoKindParam, CompanyLogoKind> = {
@@ -92,7 +101,8 @@ export class CompanySettingsService {
     const logos = await this.prisma.companyLogo.findMany({
       where: { companySettingId: settings.id },
     });
-    const response = await this.toSettingsResponse(settings, logos);
+    const profiles = await this.listProfiles();
+    const response = await this.toSettingsResponse(settings, logos, profiles);
     await this.cache.set(
       CACHE_KEYS.companySettings,
       response,
@@ -148,7 +158,8 @@ export class CompanySettingsService {
     }
 
     await this.invalidateSettingsCache();
-    return this.toSettingsResponse(updated, updated.logos);
+    const profiles = await this.listProfiles();
+    return this.toSettingsResponse(updated, updated.logos, profiles);
   }
 
   async convertCurrency(
@@ -409,7 +420,14 @@ export class CompanySettingsService {
     }
   }
 
-  private async readLogoBinary(logo: CompanyLogo) {
+  private async readLogoBinary(logo: {
+    originalName: string;
+    mimeType: string;
+    bucket: string | null;
+    objectKey: string | null;
+    storagePath: string | null;
+    compressionAlgo: CompanyLogo['compressionAlgo'];
+  }) {
     let storedBuffer: Buffer;
     if (logo.bucket && logo.objectKey && this.minioService.isEnabled()) {
       try {
@@ -459,6 +477,7 @@ export class CompanySettingsService {
       updatedAt: Date;
     },
     logos: CompanyLogo[],
+    profiles: CompanyProfile[],
   ): Promise<CompanySettingsResponseDto> {
     const responses = await Promise.all(
       logos.map(async (logo) => {
@@ -501,6 +520,9 @@ export class CompanySettingsService {
       createdAt: settings.createdAt,
       updatedAt: settings.updatedAt,
       logoSlots,
+      profiles: await Promise.all(
+        profiles.map((profile) => this.toProfileResponse(profile)),
+      ),
     };
   }
 
@@ -535,7 +557,12 @@ export class CompanySettingsService {
    * Prefere une URL MinIO pre-signee ; sinon URL API absolue (JWT requis).
    */
   private async buildLogoPreviewUrl(
-    logo: CompanyLogo,
+    logo: {
+      bucket: string | null;
+      objectKey: string | null;
+      mimeType: string;
+      compressionAlgo: CompanyLogo['compressionAlgo'] | null;
+    },
     relativeUrl: string,
   ): Promise<string> {
     if (logo.bucket && logo.objectKey && this.minioService.isEnabled()) {
@@ -588,5 +615,432 @@ export class CompanySettingsService {
     if (logo.storagePath) {
       await unlink(logo.storagePath).catch(() => undefined);
     }
+  }
+
+  async createProfile(dto: CreateCompanyProfileDto, userId?: string) {
+    const hasDefault = await this.prisma.companyProfile.findFirst({
+      where: { isDefault: true },
+      select: { id: true },
+    });
+    const makeDefault = dto.isDefault === true || !hasDefault;
+    const created = await this.prisma.$transaction(async (tx) => {
+      if (makeDefault) {
+        await tx.companyProfile.updateMany({
+          where: { isDefault: true },
+          data: { isDefault: false },
+        });
+      }
+      return tx.companyProfile.create({
+        data: {
+          companyName: dto.companyName,
+          nif: dto.nif ?? null,
+          stat: dto.stat ?? null,
+          phone: dto.phone ?? null,
+          email: dto.email ?? null,
+          addressLine: dto.addressLine ?? null,
+          city: dto.city ?? null,
+          postalCode: dto.postalCode ?? null,
+          country: dto.country ?? null,
+          iban: dto.iban ?? null,
+          mobileMoney: dto.mobileMoney ?? null,
+          isDefault: makeDefault,
+        },
+      });
+    });
+
+    if (makeDefault) {
+      await this.syncDefaultProfile(created);
+    }
+    await this.auditProfile(userId, created.id, 'Société créée', {
+      ...(dto as object),
+      isDefault: makeDefault,
+    });
+    await this.invalidateSettingsCache();
+    return this.toProfileResponse(created);
+  }
+
+  async updateProfile(
+    id: string,
+    dto: UpdateCompanyProfileDto,
+    userId?: string,
+  ) {
+    const current = await this.requireProfile(id);
+    if (dto.isDefault === false && current.isDefault) {
+      throw new BadRequestException(
+        'Choisissez une autre société par défaut avant de retirer celle-ci.',
+      );
+    }
+    const makeDefault = dto.isDefault === true;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (makeDefault) {
+        await tx.companyProfile.updateMany({
+          where: { isDefault: true, id: { not: id } },
+          data: { isDefault: false },
+        });
+      }
+      return tx.companyProfile.update({
+        where: { id },
+        data: {
+          ...(dto.companyName !== undefined
+            ? { companyName: dto.companyName }
+            : {}),
+          ...(dto.nif !== undefined ? { nif: dto.nif } : {}),
+          ...(dto.stat !== undefined ? { stat: dto.stat } : {}),
+          ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
+          ...(dto.email !== undefined ? { email: dto.email } : {}),
+          ...(dto.addressLine !== undefined
+            ? { addressLine: dto.addressLine }
+            : {}),
+          ...(dto.city !== undefined ? { city: dto.city } : {}),
+          ...(dto.postalCode !== undefined
+            ? { postalCode: dto.postalCode }
+            : {}),
+          ...(dto.country !== undefined ? { country: dto.country } : {}),
+          ...(dto.iban !== undefined ? { iban: dto.iban } : {}),
+          ...(dto.mobileMoney !== undefined
+            ? { mobileMoney: dto.mobileMoney }
+            : {}),
+          ...(dto.isDefault !== undefined
+            ? { isDefault: dto.isDefault === true }
+            : {}),
+        },
+      });
+    });
+
+    if (updated.isDefault) {
+      await this.syncDefaultProfile(updated);
+    }
+    await this.auditProfile(userId, updated.id, 'Société mise à jour', {
+      ...(dto as object),
+    });
+    await this.invalidateSettingsCache();
+    return this.toProfileResponse(updated);
+  }
+
+  async setDefaultProfile(id: string, userId?: string) {
+    await this.requireProfile(id);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.companyProfile.updateMany({
+        where: { isDefault: true },
+        data: { isDefault: false },
+      });
+      return tx.companyProfile.update({
+        where: { id },
+        data: { isDefault: true },
+      });
+    });
+    await this.syncDefaultProfile(updated);
+    await this.auditProfile(userId, updated.id, 'Société définie par défaut', {
+      isDefault: true,
+    });
+    await this.invalidateSettingsCache();
+    return this.toProfileResponse(updated);
+  }
+
+  async deleteProfile(id: string, userId?: string) {
+    const current = await this.requireProfile(id);
+    const count = await this.prisma.companyProfile.count();
+    if (count <= 1) {
+      throw new BadRequestException(
+        'Au moins une société doit rester enregistrée.',
+      );
+    }
+
+    const replacement = current.isDefault
+      ? await this.prisma.companyProfile.findFirst({
+          where: { id: { not: id } },
+          orderBy: { createdAt: 'asc' },
+        })
+      : null;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (replacement) {
+        await tx.companyProfile.update({
+          where: { id: replacement.id },
+          data: { isDefault: true },
+        });
+      }
+      await tx.companyProfile.delete({ where: { id } });
+    });
+
+    await this.removeStoredObject({
+      bucket: current.logoBucket,
+      objectKey: current.logoObjectKey,
+      storagePath: current.logoStoragePath,
+    });
+
+    if (replacement) {
+      const nextDefault = await this.prisma.companyProfile.findUnique({
+        where: { id: replacement.id },
+      });
+      if (nextDefault) {
+        await this.syncDefaultProfile(nextDefault);
+      }
+    }
+    await this.auditProfile(userId, id, 'Société supprimée', { deleted: true });
+    await this.invalidateSettingsCache();
+    return { id, deleted: true };
+  }
+
+  async upsertProfileLogo(
+    id: string,
+    file: Express.Multer.File,
+    userId?: string,
+  ) {
+    this.assertLogoFile(file);
+    const profile = await this.requireProfile(id);
+    const version = profile.logoObjectKey || profile.logoStoragePath
+      ? this.extractVersion(profile.logoObjectKey ?? profile.logoStoragePath) + 1
+      : 1;
+
+    const objectKey = this.gedPathsService.buildObjectKey({
+      domain: 'admin',
+      entityType: 'company-profile',
+      entityId: profile.id,
+      documentType: 'logo',
+      originalFileName: file.originalname,
+      version,
+    });
+
+    const stored = await this.persistLogoObject(objectKey, file);
+    if (profile.logoObjectKey || profile.logoStoragePath) {
+      await this.removeStoredObject({
+        bucket: profile.logoBucket,
+        objectKey: profile.logoObjectKey,
+        storagePath: profile.logoStoragePath,
+      });
+    }
+
+    const updated = await this.prisma.companyProfile.update({
+      where: { id: profile.id },
+      data: {
+        logoOriginalName: file.originalname,
+        logoMimeType: file.mimetype,
+        logoBucket: stored.bucket,
+        logoObjectKey: stored.objectKey,
+        logoStoragePath: stored.storagePath,
+        logoOriginalSize: stored.originalSize,
+        logoCompressedSize: stored.compressedSize,
+        logoCompressionAlgo: stored.compressionAlgo,
+      },
+    });
+
+    await this.auditProfile(userId, updated.id, 'Logo société mis à jour', {
+      logo: file.originalname,
+    });
+    await this.invalidateSettingsCache();
+    return this.toProfileResponse(updated);
+  }
+
+  async deleteProfileLogo(id: string, userId?: string) {
+    const profile = await this.requireProfile(id);
+    if (!profile.logoObjectKey && !profile.logoStoragePath) {
+      throw new NotFoundException('Aucun logo pour cette société');
+    }
+    await this.removeStoredObject({
+      bucket: profile.logoBucket,
+      objectKey: profile.logoObjectKey,
+      storagePath: profile.logoStoragePath,
+    });
+    const updated = await this.prisma.companyProfile.update({
+      where: { id },
+      data: {
+        logoOriginalName: null,
+        logoMimeType: null,
+        logoBucket: null,
+        logoObjectKey: null,
+        logoStoragePath: null,
+        logoOriginalSize: null,
+        logoCompressedSize: null,
+        logoCompressionAlgo: null,
+      },
+    });
+    await this.auditProfile(userId, id, 'Logo société supprimé', {
+      logo: null,
+    });
+    await this.invalidateSettingsCache();
+    return this.toProfileResponse(updated);
+  }
+
+  async getProfileLogoBinary(id: string) {
+    const profile = await this.requireProfile(id);
+    return this.readProfileLogoBinary(profile);
+  }
+
+  /** Logo de la société par défaut, sinon le slot facture (puis primary). */
+  async resolveOfficialLogoDataUri(): Promise<string | null> {
+    const profiles = await this.prisma.companyProfile.findMany({
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    });
+    const profile = profiles.find((item) => item.isDefault) ?? profiles[0];
+    if (profile && (profile.logoObjectKey || profile.logoStoragePath)) {
+      try {
+        const binary = await this.readProfileLogoBinary(profile);
+        return `data:${binary.mimeType};base64,${binary.buffer.toString('base64')}`;
+      } catch (error) {
+        if (!(error instanceof NotFoundException) && !isMissingObjectError(error)) {
+          throw error;
+        }
+      }
+    }
+    return this.resolveLogoDataUri('invoice');
+  }
+
+  private async listProfiles() {
+    const existing = await this.prisma.companyProfile.findMany({
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    });
+    if (existing.length > 0) {
+      return existing;
+    }
+
+    const settings = await this.ensureSettings();
+    const created = await this.prisma.companyProfile.create({
+      data: {
+        companyName: settings.companyName,
+        nif: settings.siret,
+        stat: settings.vatNumber,
+        addressLine: settings.addressLine,
+        city: settings.city,
+        postalCode: settings.postalCode,
+        country: settings.country,
+        iban: settings.iban,
+        mobileMoney: settings.mobileMoney,
+        isDefault: true,
+      },
+    });
+    return [created];
+  }
+
+  private async requireProfile(id: string) {
+    const profile = await this.prisma.companyProfile.findUnique({
+      where: { id },
+    });
+    if (!profile) {
+      throw new NotFoundException('Société introuvable');
+    }
+    return profile;
+  }
+
+  private async syncDefaultProfile(profile: CompanyProfile) {
+    const settings = await this.ensureSettings();
+    await this.prisma.companySetting.update({
+      where: { id: settings.id },
+      data: {
+        companyName: profile.companyName,
+        siret: profile.nif,
+        vatNumber: profile.stat,
+        addressLine: profile.addressLine,
+        city: profile.city,
+        postalCode: profile.postalCode,
+        country: profile.country,
+        iban: profile.iban,
+        mobileMoney: profile.mobileMoney,
+      },
+    });
+  }
+
+  private async auditProfile(
+    userId: string | undefined,
+    entityId: string,
+    details: string,
+    changes: Record<string, unknown>,
+  ) {
+    if (!userId) return;
+    await this.auditService.log({
+      entityType: 'CompanyProfile',
+      entityId,
+      action: 'COMPANY_SETTINGS_UPDATED',
+      userId,
+      changes,
+      details,
+    });
+  }
+
+  private async persistLogoObject(objectKey: string, file: Express.Multer.File) {
+    const storedBuffer = file.buffer;
+    const algo = 'NONE' as const;
+    let bucket: string | null = null;
+    let persistedObjectKey: string | null = null;
+    let storagePath: string | null = null;
+
+    if (this.minioService.isEnabled()) {
+      bucket = DEFAULT_GED_BUCKET_RAW;
+      persistedObjectKey = objectKey;
+      await this.minioService.putObject({
+        bucket,
+        key: objectKey,
+        body: storedBuffer,
+        contentType: file.mimetype,
+      });
+    } else {
+      storagePath = join(process.cwd(), 'uploads', 'ged', objectKey);
+      await mkdir(dirname(storagePath), { recursive: true });
+      await writeFile(storagePath, storedBuffer);
+    }
+
+    return {
+      bucket,
+      objectKey: persistedObjectKey,
+      storagePath,
+      originalSize: file.size,
+      compressedSize: storedBuffer.length,
+      compressionAlgo: algo,
+    };
+  }
+
+  private async readProfileLogoBinary(profile: CompanyProfile) {
+    if (!profile.logoMimeType || (!profile.logoObjectKey && !profile.logoStoragePath)) {
+      throw new NotFoundException('Aucun logo pour cette société');
+    }
+    return this.readLogoBinary({
+      originalName: profile.logoOriginalName ?? 'logo',
+      mimeType: profile.logoMimeType,
+      bucket: profile.logoBucket,
+      objectKey: profile.logoObjectKey,
+      storagePath: profile.logoStoragePath,
+      compressionAlgo: profile.logoCompressionAlgo ?? 'NONE',
+    });
+  }
+
+  private async toProfileResponse(
+    profile: CompanyProfile,
+  ): Promise<CompanyProfileResponseDto> {
+    const hasLogo = Boolean(profile.logoObjectKey || profile.logoStoragePath);
+    const logoUrl = hasLogo
+      ? `/company-settings/profiles/${profile.id}/logo`
+      : null;
+    const logoPreviewUrl =
+      hasLogo && logoUrl
+        ? await this.buildLogoPreviewUrl(
+            {
+              bucket: profile.logoBucket,
+              objectKey: profile.logoObjectKey,
+              mimeType: profile.logoMimeType ?? 'image/png',
+              compressionAlgo: profile.logoCompressionAlgo,
+            },
+            logoUrl,
+          )
+        : null;
+
+    return {
+      id: profile.id,
+      companyName: profile.companyName,
+      nif: profile.nif,
+      stat: profile.stat,
+      phone: profile.phone,
+      email: profile.email,
+      addressLine: profile.addressLine,
+      city: profile.city,
+      postalCode: profile.postalCode,
+      country: profile.country,
+      iban: profile.iban,
+      mobileMoney: profile.mobileMoney,
+      isDefault: profile.isDefault,
+      logoUrl,
+      logoPreviewUrl,
+      createdAt: profile.createdAt,
+      updatedAt: profile.updatedAt,
+    };
   }
 }

@@ -22,6 +22,8 @@ export type InvoiceDocumentPreviewData = {
   vatNumber: string;
   iban: string;
   cgvText: string;
+  phone?: string;
+  email?: string;
   /** Data-URI du logo facture résolu (override invoice → primary), sinon null. */
   logoDataUri: string | null;
   clientName: string;
@@ -118,6 +120,16 @@ export function buildInvoiceDocumentPreviewHtml(
   if (content.header.showVatNumber) {
     companyBits.push(
       `<div style="color:#64748b;">${escapeHtml(labels.vatPrefix)} ${escapeHtml(data.vatNumber)}</div>`,
+    );
+  }
+  if (data.phone?.trim()) {
+    companyBits.push(
+      `<div style="color:#64748b;">Tél. ${escapeHtml(data.phone.trim())}</div>`,
+    );
+  }
+  if (data.email?.trim()) {
+    companyBits.push(
+      `<div style="color:#64748b;">${escapeHtml(data.email.trim())}</div>`,
     );
   }
 

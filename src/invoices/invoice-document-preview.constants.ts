@@ -1,7 +1,7 @@
 export const INVOICE_DOCUMENT_PREVIEW_LABELS = {
   logoPlaceholder: 'Logo',
-  siretPrefix: 'SIRET',
-  vatPrefix: 'TVA',
+  siretPrefix: 'NIF',
+  vatPrefix: 'STAT',
   defaultClientLabel: 'Facturé à',
   metaInvoiceNumber: 'N°',
   metaIssueDate: 'Émise le',

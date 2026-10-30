@@ -80,6 +80,7 @@ describe('InvoiceDocumentTemplatesService', () => {
       cgvText: 'CGV test',
     }),
     resolveLogoDataUri: jest.fn().mockResolvedValue(null),
+    resolveOfficialLogoDataUri: jest.fn().mockResolvedValue(null),
   } as unknown as CompanySettingsService;
 
   it('returns empty list without error', async () => {

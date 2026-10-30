@@ -324,6 +324,35 @@ model CompanySetting {
   updatedAt           DateTime      @updatedAt
 }
 
+/// Identité légale imprimée sur les documents officiels. Une seule est par défaut.
+model CompanyProfile {
+  id                  String           @id @default(cuid())
+  companyName         String
+  nif                 String?
+  stat                String?
+  phone               String?
+  email               String?
+  addressLine         String?
+  city                String?
+  postalCode          String?
+  country             String?
+  iban                String?
+  mobileMoney         String?
+  isDefault           Boolean          @default(false)
+  logoOriginalName    String?
+  logoMimeType        String?
+  logoBucket          String?
+  logoObjectKey       String?
+  logoStoragePath     String?
+  logoOriginalSize    Int?
+  logoCompressedSize  Int?
+  logoCompressionAlgo CompressionAlgo?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([isDefault])
+}
+
 /// Logos société (GED): un fichier actif par kind, domaine admin/company-setting.
 model CompanyLogo {
   id               String           @id @default(cuid())

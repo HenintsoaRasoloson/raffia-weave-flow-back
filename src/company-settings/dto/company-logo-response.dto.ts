@@ -3,6 +3,7 @@ import {
   COMPANY_LOGO_KINDS,
   type CompanyLogoKindParam,
 } from '../company-settings.constants';
+import { CompanyProfileResponseDto } from './company-profile.dto';
 
 const COMPRESSION_ALGOS = ['NONE', 'GZIP'] as const;
 
@@ -165,6 +166,9 @@ export class CompanySettingsResponseDto {
 
   @ApiProperty({ type: [CompanyLogoSlotDto] })
   logoSlots!: CompanyLogoSlotDto[];
+
+  @ApiProperty({ type: [CompanyProfileResponseDto] })
+  profiles!: CompanyProfileResponseDto[];
 }
 
 export class DeleteCompanyLogoResponseDto {

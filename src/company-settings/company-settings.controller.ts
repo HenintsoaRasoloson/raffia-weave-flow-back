@@ -44,6 +44,11 @@ import {
   ConvertCurrencyQueryDto,
   ConvertCurrencyResponseDto,
 } from './dto/convert-currency.dto';
+import {
+  CompanyProfileResponseDto,
+  CreateCompanyProfileDto,
+  UpdateCompanyProfileDto,
+} from './dto/company-profile.dto';
 import { UpdateCompanySettingsDto } from './dto/update-company-settings.dto';
 
 @ApiTags('Parametres')
@@ -88,6 +93,116 @@ export class CompanySettingsController {
     @CurrentUser() user: JwtAccessPayload,
   ) {
     return this.companySettingsService.updateSettings(dto, user.sub);
+  }
+
+  @Post('profiles')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Ajouter une société (identité des documents officiels)' })
+  @ApiCreatedResponse({ type: CompanyProfileResponseDto })
+  createProfile(
+    @Body() dto: CreateCompanyProfileDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.companySettingsService.createProfile(dto, user.sub);
+  }
+
+  @Patch('profiles/:id')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Modifier une société' })
+  @ApiOkResponse({ type: CompanyProfileResponseDto })
+  updateProfile(
+    @Param('id') id: string,
+    @Body() dto: UpdateCompanyProfileDto,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.companySettingsService.updateProfile(id, dto, user.sub);
+  }
+
+  @Post('profiles/:id/default')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Définir la société affichée sur les documents officiels',
+  })
+  @ApiOkResponse({ type: CompanyProfileResponseDto })
+  setDefaultProfile(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.companySettingsService.setDefaultProfile(id, user.sub);
+  }
+
+  @Delete('profiles/:id')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Supprimer une société' })
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        deleted: { type: 'boolean' },
+      },
+    },
+  })
+  deleteProfile(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.companySettingsService.deleteProfile(id, user.sub);
+  }
+
+  @Post('profiles/:id/logo')
+  @UseGuards(AdminGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: COMPANY_LOGO_MAX_FILE_SIZE_BYTES },
+      fileFilter: (_req, file, cb) => {
+        const allowed = COMPANY_LOGO_ALLOWED_MIME_TYPES as readonly string[];
+        cb(null, allowed.includes(file.mimetype));
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+      required: ['file'],
+    },
+  })
+  @ApiCreatedResponse({ type: CompanyProfileResponseDto })
+  upsertProfileLogo(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.companySettingsService.upsertProfileLogo(id, file, user.sub);
+  }
+
+  @Get('profiles/:id/logo')
+  @ApiOperation({ summary: 'Lire le logo d une société' })
+  async getProfileLogo(
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const logo = await this.companySettingsService.getProfileLogoBinary(id);
+    res.setHeader('Content-Type', logo.mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${logo.originalName}"`,
+    );
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    return new StreamableFile(logo.buffer);
+  }
+
+  @Delete('profiles/:id/logo')
+  @UseGuards(AdminGuard)
+  @ApiOkResponse({ type: CompanyProfileResponseDto })
+  deleteProfileLogo(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.companySettingsService.deleteProfileLogo(id, user.sub);
   }
 
   @Post('logos/:kind')

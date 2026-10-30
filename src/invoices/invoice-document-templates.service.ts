@@ -222,24 +222,27 @@ export class InvoiceDocumentTemplatesService {
     invoiceType: InvoiceType | null,
   ): Promise<InvoiceDocumentPreviewData> {
     const company = await this.companySettingsService.getSettings();
+    const identity = this.documentCompanyIdentity(company);
     const logoDataUri =
-      await this.companySettingsService.resolveLogoDataUri('invoice');
+      await this.companySettingsService.resolveOfficialLogoDataUri();
     const addressParts = [
-      company.addressLine,
-      [company.postalCode, company.city].filter(Boolean).join(' '),
-      company.country,
+      identity.addressLine,
+      [identity.postalCode, identity.city].filter(Boolean).join(' '),
+      identity.country,
     ].filter(Boolean);
 
     return {
       companyName:
-        company.companyName || MOCK_INVOICE_DOCUMENT_PREVIEW.companyName,
+        identity.companyName || MOCK_INVOICE_DOCUMENT_PREVIEW.companyName,
       companyAddress:
         addressParts.length > 0
           ? addressParts.join('\n')
           : MOCK_INVOICE_DOCUMENT_PREVIEW.companyAddress,
-      siret: company.siret || MOCK_INVOICE_DOCUMENT_PREVIEW.siret,
-      vatNumber: company.vatNumber || MOCK_INVOICE_DOCUMENT_PREVIEW.vatNumber,
-      iban: company.iban || MOCK_INVOICE_DOCUMENT_PREVIEW.iban,
+      siret: identity.siret || MOCK_INVOICE_DOCUMENT_PREVIEW.siret,
+      vatNumber: identity.vatNumber || MOCK_INVOICE_DOCUMENT_PREVIEW.vatNumber,
+      iban: identity.iban || MOCK_INVOICE_DOCUMENT_PREVIEW.iban,
+      phone: identity.phone,
+      email: identity.email,
       cgvText: company.cgvText || MOCK_INVOICE_DOCUMENT_PREVIEW.cgvText,
       logoDataUri,
       clientName: MOCK_INVOICE_DOCUMENT_PREVIEW.clientName,
@@ -278,13 +281,14 @@ export class InvoiceDocumentTemplatesService {
     }
 
     const company = await this.companySettingsService.getSettings();
+    const identity = this.documentCompanyIdentity(company);
     const logoDataUri =
-      await this.companySettingsService.resolveLogoDataUri('invoice');
+      await this.companySettingsService.resolveOfficialLogoDataUri();
     const client = invoice.client;
     const companyAddress = [
-      company.addressLine,
-      [company.postalCode, company.city].filter(Boolean).join(' '),
-      company.country,
+      identity.addressLine,
+      [identity.postalCode, identity.city].filter(Boolean).join(' '),
+      identity.country,
     ]
       .filter(Boolean)
       .join('\n');
@@ -297,11 +301,13 @@ export class InvoiceDocumentTemplatesService {
       .join('\n');
 
     return {
-      companyName: company.companyName,
+      companyName: identity.companyName,
       companyAddress,
-      siret: company.siret ?? '',
-      vatNumber: company.vatNumber ?? '',
-      iban: company.iban ?? '',
+      siret: identity.siret,
+      vatNumber: identity.vatNumber,
+      iban: identity.iban,
+      phone: identity.phone,
+      email: identity.email,
       cgvText: company.cgvText ?? '',
       logoDataUri,
       clientName: client.name,
@@ -325,6 +331,60 @@ export class InvoiceDocumentTemplatesService {
       taxAmount: this.formatDecimalFr(invoice.taxAmount),
       totalTtc: this.formatDecimalFr(invoice.totalTtc),
       paidAmount: this.formatDecimalFr(invoice.paidAmount ?? 0),
+    };
+  }
+
+  private documentCompanyIdentity(company: {
+    companyName: string;
+    addressLine?: string | null;
+    postalCode?: string | null;
+    city?: string | null;
+    country?: string | null;
+    siret?: string | null;
+    vatNumber?: string | null;
+    iban?: string | null;
+    profiles?: Array<{
+      isDefault: boolean;
+      companyName: string;
+      addressLine?: string | null;
+      postalCode?: string | null;
+      city?: string | null;
+      country?: string | null;
+      nif?: string | null;
+      stat?: string | null;
+      iban?: string | null;
+      phone?: string | null;
+      email?: string | null;
+    }>;
+  }) {
+    const profile =
+      company.profiles?.find((item) => item.isDefault) ?? company.profiles?.[0];
+    if (!profile) {
+      return {
+        companyName: company.companyName,
+        addressLine: company.addressLine ?? null,
+        postalCode: company.postalCode ?? null,
+        city: company.city ?? null,
+        country: company.country ?? null,
+        siret: company.siret ?? '',
+        vatNumber: company.vatNumber ?? '',
+        iban: company.iban ?? '',
+        phone: '',
+        email: '',
+      };
+    }
+
+    return {
+      companyName: profile.companyName,
+      addressLine: profile.addressLine ?? null,
+      postalCode: profile.postalCode ?? null,
+      city: profile.city ?? null,
+      country: profile.country ?? null,
+      siret: profile.nif ?? '',
+      vatNumber: profile.stat ?? '',
+      iban: profile.iban ?? '',
+      phone: profile.phone ?? '',
+      email: profile.email ?? '',
     };
   }
 
